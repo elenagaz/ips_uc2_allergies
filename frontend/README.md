@@ -1,4 +1,4 @@
-# ips_test
+# ips_uc2
 
 ## Project setup
 ```

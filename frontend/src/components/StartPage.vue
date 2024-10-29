@@ -69,7 +69,7 @@
           <tbody>
           <tr v-for="(observation, index) in sortedObservations" :key="index">
             <td>{{ observation.id || 'N/A' }}</td>
-            <td>{{ observation.valueQuantity?.value || 'N/A' }} {{ observation.valueQuantity?.unit || '' }}</td>
+            <td>{{ observation.valueQuantity?.value || observation.note || observation.value ||'N/A' }} {{ observation.valueQuantity?.code || '' }}</td>
             <td>{{ observation.effectiveDateTime || 'N/A' }}</td>
           </tr>
           </tbody>
@@ -168,15 +168,11 @@ export default {
   font-weight: bold;
 }
 .data-view {
-  list-style-type: none; /* Remove bullets */
-  padding: 0; /* Remove default padding */
-  margin: 0; /* Remove default margin */
-  text-align: left; /* Align text to the left */
+  list-style-type: none;
+  text-align: left;
 }
 .address-list {
-  list-style-type: none; /* Remove bullets from the address list */
-  padding: 0; /* Remove default padding */
-  margin: 0; /* Remove default margin */
-  text-align: left; /* Align text to the left */
+  list-style-type: none;
+  text-align: left;
 }
 </style>

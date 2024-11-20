@@ -23,9 +23,44 @@
               <li v-if="patient.address[0].line"><strong>Street:</strong> {{ patient.address[0].line.join(', ') }}</li>
             </ul>
           </li>
+          <li v-for="(entry, index) in socialHistoryEntries" :key="index">
+            <strong>Observation Reference {{ index + 1 }}:</strong> {{ entry.reference }}
+          </li>
         </ul>
       </div>
     </div>
+
+
+    <div class="card">
+      <h2 @click="toggleSection('importantInfo')" style="cursor: pointer;">
+        Important Information (Allergies)
+      </h2>
+      <div v-if="isImportantInfoVisible" class="card-content">
+        <table class="data-table">
+          <thead>
+          <tr>
+            <th>Type</th>
+            <th>Criticality</th>
+            <th>Date</th>
+            <th>Confirmed</th>
+            <th>Symptoms</th>
+            <th>Severity</th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr v-for="(allergy, index) in allergyEntries" :key="index">
+            <td>{{ allergy.type || 'N/A' }}</td>
+            <td>{{ allergy.criticality || 'N/A' }}</td>
+            <td>{{ allergy.date || 'N/A' }}</td>
+            <td>{{ allergy.confirmed || 'N/A' }}</td>
+            <td>{{ allergy.symptoms || 'N/A' }}</td>
+            <td>{{ allergy.severity || 'N/A' }}</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
 
     <!-- Card for Encounters with Sorted Table -->
     <div class="card">
@@ -79,6 +114,7 @@
   </div>
 </template>
 
+
 <script>
 import axios from 'axios';
 
@@ -91,6 +127,12 @@ export default {
       isPatientVisible: false,
       isEncountersVisible: false,
       isObservationsVisible: false,
+      composition: null,
+      observationReference: null,
+      socialHistoryEntries: [],
+      isImportantInfoVisible: true,
+      allergyEntries: [],
+
     };
   },
   computed: {
@@ -108,6 +150,15 @@ export default {
   methods: {
     async fetchPatientData() {
       try {
+        // Fetch the Composition resource
+        const patientComposition = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
+        this.composition = patientComposition.data;
+        console.log("getting data")
+        console.log(patientComposition.data.entry[0].resource.section[5].entry[0].reference)
+
+        // Log composition to check its structure
+        console.log("Fetched Composition:", this.composition);
+
         const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
         this.patient = patientResponse.data;
 
@@ -116,13 +167,88 @@ export default {
 
         const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
         this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];
+
+        this.fetchSocialHistoryEntries();
+        // Fetch Allergies (Important Information)
+        this.fetchAllergyData();
+
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     },
+
+    async fetchAllergyDetails(allergyReference) {
+      try {
+        const allergyResponse = await axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/AllergyIntolerance/${allergyReference.split('/')[1]}`);
+        const allergy = allergyResponse.data;
+
+        console.log(allergy.reaction[0])
+        this.allergyEntries.push({
+          type: allergy.code.coding[0].display || 'N/A',
+          criticality: allergy.criticality || 'N/A',
+          date: allergy.onsetDateTime || 'N/A',
+          confirmed: allergy.verificationStatus.coding[0].code || 'N/A',
+          symptoms: allergy.reaction[0].manifestation[0].coding[0].display || 'N/A',
+          severity: allergy.reaction[0].severity || 'N/A',
+        });
+      } catch (error) {
+        console.error(`Error fetching allergy details for reference ${allergyReference}:`, error);
+      }
+    },
+
+    fetchAllergyData() {
+      if (!this.composition || !this.composition.entry) {
+        console.warn("Composition data or entries are not available.");
+        return;
+      }
+
+      // Initialize allergy entries array as empty
+      this.allergyEntries = [];
+
+      // Loop through the composition sections and look for the Allergies section
+      this.composition.entry[0].resource.section.forEach((section) => {
+        if (section.title && section.title.includes('Allergies')) {
+          section.entry.forEach((entry) => {
+            if (entry.reference) {
+              this.fetchAllergyDetails(entry.reference);
+              console.log(entry.reference)
+            }
+          });
+        }
+      });
+    },
+
+    fetchSocialHistoryEntries() {
+      if (!this.composition || !this.composition.entry) {
+        console.warn("Composition data or entries are not available.");
+        return;
+      }
+
+      // Initialize social history entries as an empty array
+      this.socialHistoryEntries = [];
+
+      // Loop through the composition sections to find social history related references
+      this.composition.entry[0].resource.section.forEach((section) => {
+        if (section.title && section.title.includes('Social History')) {
+          // Iterate over the entries in the section and collect references
+          section.entry.forEach((entry) => {
+            if (entry.reference) {
+              this.socialHistoryEntries.push(entry);
+            }
+          });
+        }
+      });
+
+      if (this.socialHistoryEntries.length === 0) {
+        console.warn("No social history entries found.");
+      }
+    },
+
     toggleSection(section) {
       if (section === 'patient') {
         this.isPatientVisible = !this.isPatientVisible;
+      } else if (section === 'importantInfo') {
+        this.isImportantInfoVisible = !this.isImportantInfoVisible;
       } else if (section === 'encounters') {
         this.isEncountersVisible = !this.isEncountersVisible;
       } else if (section === 'observations') {
@@ -132,6 +258,7 @@ export default {
   },
   mounted() {
     this.fetchPatientData();
+
   }
 };
 </script>

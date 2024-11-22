@@ -88,6 +88,7 @@ export default {
       patient: null,
       encounters: [],
       observations: [],
+      compositionSections: [],
       isPatientVisible: false,
       isEncountersVisible: false,
       isObservationsVisible: false,
@@ -106,33 +107,110 @@ export default {
     }
   },
   methods: {
-    async fetchPatientData() {
-      try {
-        const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
-        this.patient = patientResponse.data;
+  async fetchPatientData() {
+    try {
+      const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
+      this.patient = patientResponse.data;
 
-        const encountersResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Encounter?patient=UC2-Patient');
-        this.encounters = encountersResponse.data.entry?.map(entry => entry.resource) || [];
+      const encountersResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Encounter?patient=UC2-Patient');
+      this.encounters = encountersResponse.data.entry?.map(entry => entry.resource) || [];
 
-        const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
-        this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    },
-    toggleSection(section) {
-      if (section === 'patient') {
-        this.isPatientVisible = !this.isPatientVisible;
-      } else if (section === 'encounters') {
-        this.isEncountersVisible = !this.isEncountersVisible;
-      } else if (section === 'observations') {
-        this.isObservationsVisible = !this.isObservationsVisible;
-      }
+      const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
+      this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];
+      
+      const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
+      this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
+
+      await this.fetchAllergyIntolerances();
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
     }
   },
-  mounted() {
-    this.fetchPatientData();
+
+  // fetch alleergy intolerances from the allergy reference in the composition resource
+  async fetchAllergyIntolerances() {
+    try {
+      const allergyReferences = this.extractAllergyIntoleranceReferences();
+      const allergyIntolerances = await Promise.all(
+        allergyReferences.map(ref => axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/${ref}`))
+      );
+      this.allergyIntolerances = allergyIntolerances.map(response => response.data);
+      this.allergyIntolerances.forEach(allergy => {
+        //TODO: put relevabt data into diagram e.g. color code criticality here
+        const extractedData = this.extractAllergyIntoleranceData(allergy);
+        console.log(extractedData);
+      });
+    } catch (error) {
+      console.error("Error fetching allergy intolerances:", error);
+    }
+  },
+
+  // extract reference to allergy intolerance resources from the composition resource
+  extractAllergyIntoleranceReferences() {
+    const allergySection = this.compositionSections.find(section => section.title === 'Allergies Summary');
+    if (!allergySection) return [];
+    return allergySection.entry
+      .filter(entry => entry.reference.startsWith('AllergyIntolerance'))
+      .map(entry => entry.reference);
+  },
+
+  // extract relevant data from allergy intolerance resources
+  extractAllergyIntoleranceData(allergy) {
+    const allergySnomedCode = allergy.code?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+    const criticality = allergy.criticality || null;
+    const manifestationSnomedCode = allergy.reaction?.[0]?.manifestation?.[0]?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+    const encounterReference = allergy.encounter?.reference || null;
+
+    return {
+      allergySnomedCode,
+      criticality,
+      manifestationSnomedCode,
+      encounterReference
+    };
+  },
+
+  // translate SNOMED code to human-readable term according to the specified language
+  // possible languages: Spanish: 'es' , English: 'en', French: 'fr', German 'de' (German is limited and does not work)
+  async  translateSnomedCode(snomedCode, language) {
+    const endpoints = {
+        es: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-ES/2024-09-30/concepts?size=1&conceptIds=${snomedCode}`,
+        en: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts?size=1&conceptIds=${snomedCode}`,
+        fr: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-FR/2024-06-21/concepts?size=1&conceptIds=${snomedCode}`,
+        de: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-DE/2024-05-15/concepts?size=1&conceptIds=${snomedCode}`
+    };
+
+    try {
+        const response = await axios.get(endpoints[language]);
+        return this.extractTerm(response.data, language);
+    } catch (error) {
+        console.error(`Error fetching SNOMED code translation: ${error}`);
+        return null;
+    }
+  },
+
+  // extract term from the response data
+  extractTerm(data, language) {
+    const descriptions = data.items[0].descriptions;
+    //find lang = language code in resonse code
+    const term = descriptions.find(desc => desc.lang === language).term;
+    return term;
+  },
+  
+  // toggle visibility of sections
+  toggleSection(section) {
+    if (section === 'patient') {
+      this.isPatientVisible = !this.isPatientVisible;
+    } else if (section === 'encounters') {
+      this.isEncountersVisible = !this.isEncountersVisible;
+    } else if (section === 'observations') {
+      this.isObservationsVisible = !this.isObservationsVisible;
+    }
   }
+},
+mounted() {
+  this.fetchPatientData();
+}
 };
 </script>
 

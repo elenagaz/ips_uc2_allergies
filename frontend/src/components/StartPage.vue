@@ -245,14 +245,14 @@ export default {
     },
 
     toggleSection(section) {
-      if (section === 'patient') {
-        this.isPatientVisible = !this.isPatientVisible;
+      if (section === 'observations') {
+        this.isObservationsVisible = !this.isObservationsVisible;
       } else if (section === 'importantInfo') {
         this.isImportantInfoVisible = !this.isImportantInfoVisible;
       } else if (section === 'encounters') {
         this.isEncountersVisible = !this.isEncountersVisible;
-      } else if (section === 'observations') {
-        this.isObservationsVisible = !this.isObservationsVisible;
+      } else if (section === 'patients') {
+        this.isPatientVisible = !this.isPatientVisible;
       }
     }
   },
@@ -260,6 +260,8 @@ export default {
     this.fetchPatientData();
 
   }
+
+  //TODO: add algorithm as search tree based on structure from ips IG 
 };
 </script>
 

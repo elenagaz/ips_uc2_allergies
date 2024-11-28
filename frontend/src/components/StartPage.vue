@@ -9,7 +9,7 @@
       </h2>
       <div v-if="isPatientVisible" class="card-content">
         <ul class="data-view">
-          <li><strong>Name:</strong> {{ patient.name?.[0]?.given?.join(' ') || 'N/A' }}</li>
+          <li><strong>Name11:</strong> {{ patient.name?.[0]?.given?.join(' ') || 'N/A' }}</li>
           <li><strong>Last Name:</strong> {{ patient.name?.[0]?.family || 'N/A' }}</li>
           <li><strong>ID:</strong> {{ patient.id }}</li>
           <li><strong>Gender:</strong> {{ patient.gender }}</li>
@@ -92,6 +92,8 @@ export default {
       isPatientVisible: false,
       isEncountersVisible: false,
       isObservationsVisible: false,
+      allergyIntolerancesTranslated: [],
+      extractedData: [],
     };
   },
   computed: {
@@ -123,12 +125,13 @@ export default {
 
       await this.fetchAllergyIntolerances();
 
+
     } catch (error) {
       console.error("Error fetching data:", error);
     }
   },
 
-  // fetch alleergy intolerances from the allergy reference in the composition resource
+  // fetch allergy intolerances from the allergy reference in the composition resource
   async fetchAllergyIntolerances() {
     try {
       const allergyReferences = this.extractAllergyIntoleranceReferences();
@@ -137,10 +140,17 @@ export default {
       );
       this.allergyIntolerances = allergyIntolerances.map(response => response.data);
       this.allergyIntolerances.forEach(allergy => {
-        //TODO: put relevabt data into diagram e.g. color code criticality here
-        const extractedData = this.extractAllergyIntoleranceData(allergy);
-        console.log(extractedData);
+        //TODO: put relevant data into diagram e.g. color code criticality here
+
+        let
+        extractedData;
+        extractedData = this.extractAllergyIntoleranceData(allergy);
+        this.extractedData = extractedData;
+        console.log(this.extractedData);
       });
+      console.log(this.extractedData.allergySnomedCode)
+      this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'fr')
+      console.log(this.extractedData2);
     } catch (error) {
       console.error("Error fetching allergy intolerances:", error);
     }
@@ -182,6 +192,7 @@ export default {
 
     try {
         const response = await axios.get(endpoints[language]);
+        console.log("this data is translated => " + this.extractTerm(response.data, language))
         return this.extractTerm(response.data, language);
     } catch (error) {
         console.error(`Error fetching SNOMED code translation: ${error}`);

@@ -335,7 +335,6 @@ export default {
       selectedLanguage: 'en',
       isLocked: true,
       isImportantInfoVisible: true,
-      isEncountersVisible: true,
       composition: null,
       composition2: null,
 
@@ -357,6 +356,8 @@ export default {
       observations: [],
       compositionSections: [],
       isObservationsVisible: false,
+      allergyIntolerancesTranslated: [],
+      extractedData: [],
       encounterIds: [],
       groupedObservations: [],
       selectedEncounterObservations: {}
@@ -447,7 +448,7 @@ export default {
     }
   },
 
-  // fetch alleergy intolerances from the allergy reference in the composition resource
+  // fetch allergy intolerances from the allergy reference in the composition resource
   async fetchAllergyIntolerances() {
     try {
       const allergyReferences = this.extractAllergyIntoleranceReferences();
@@ -456,10 +457,17 @@ export default {
       );
       this.allergyIntolerances = allergyIntolerances.map(response => response.data);
       this.allergyIntolerances.forEach(allergy => {
-        //TODO: put relevabt data into diagram e.g. color code criticality here
-        const extractedData = this.extractAllergyIntoleranceData(allergy);
-        console.log(extractedData);
+        //TODO: put relevant data into diagram e.g. color code criticality here
+
+        let
+        extractedData;
+        extractedData = this.extractAllergyIntoleranceData(allergy);
+        this.extractedData = extractedData;
+        console.log(this.extractedData);
       });
+      console.log(this.extractedData.allergySnomedCode)
+      this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'fr')
+      console.log(this.extractedData2);
     } catch (error) {
       console.error("Error fetching allergy intolerances:", error);
     }
@@ -501,6 +509,7 @@ export default {
 
     try {
         const response = await axios.get(endpoints[language]);
+        console.log("this data is translated => " + this.extractTerm(response.data, language))
         return this.extractTerm(response.data, language);
     } catch (error) {
         console.error(`Error fetching SNOMED code translation: ${error}`);

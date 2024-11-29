@@ -1,37 +1,95 @@
 <template>
   <div>
-    <h1>International Patient Summary</h1>
-
-    <!-- Card for Patient Information -->
-    <div class="card">
-      <h2 @click="toggleSection('patient')" style="cursor: pointer;">
-        Patient Information
-      </h2>
-      <div v-if="isPatientVisible" class="card-content">
-        <ul class="data-view">
-          <li><strong>Name:</strong> {{ patient.name?.[0]?.given?.join(' ') || 'N/A' }}</li>
-          <li><strong>Last Name:</strong> {{ patient.name?.[0]?.family || 'N/A' }}</li>
-          <li><strong>ID:</strong> {{ patient.id }}</li>
-          <li><strong>Gender:</strong> {{ patient.gender }}</li>
-          <li><strong>Birth Date:</strong> {{ patient.birthDate }}</li>
-          <li v-if="patient.address && patient.address.length > 0">
-            <strong>Address:</strong>
-            <ul class="address-list">
-              <li v-if="patient.address[0].country"><strong>Country:</strong> {{ patient.address[0].country }}</li>
-              <li v-if="patient.address[0].city"><strong>City:</strong> {{ patient.address[0].city }}</li>
-              <li v-if="patient.address[0].postalCode"><strong>Postal Code:</strong> {{ patient.address[0].postalCode }}</li>
-              <li v-if="patient.address[0].line"><strong>Street:</strong> {{ patient.address[0].line.join(', ') }}</li>
-            </ul>
-          </li>
-          <li v-for="(entry, index) in socialHistoryEntries" :key="index">
-            <strong>Observation Reference {{ index + 1 }}:</strong> {{ entry.reference }}
-          </li>
-        </ul>
+    <!-- Top Navigation Bar -->
+    <div class="navbar">
+      <div class="navbar-left">
+        <h1 class="navbar-title">International Patient Summary</h1>
+      </div>
+      <div class="navbar-right">
+        <!-- Language Dropdown -->
+        <select v-model="selectedLanguage" @change="changeLanguage" class="language-dropdown">
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+        </select>
+        <!-- Lock Icon -->
+        <span class="lock-icon" @click="toggleLock">
+          <i :class="isLocked ? 'fas fa-lock' : 'fas fa-lock-open'"></i>
+        </span>
       </div>
     </div>
 
 
-    <div class="card">
+    <!-- Main Content -->
+    <div>
+      <!-- Card for Patient Information -->
+
+      <div class="patient-card">
+        <h2 @click="toggleSection('patient')" style="cursor: pointer;">
+          Patient Information
+        </h2>
+        <transition name="expand-fade">
+        <div v-if="isPatientVisible" class="card-content">
+          <ul class="data-view">
+            <li><strong>Name:</strong> {{ patient?.name?.[0]?.given?.join(' ') || 'N/A' }}</li>
+            <li><strong>Last Name:</strong> {{ patient?.name?.[0]?.family || 'N/A' }}</li>
+            <li><strong>ID:</strong> {{ patient?.id || 'N/A' }}</li>
+            <li><strong>Gender:</strong> {{ patient?.gender || 'N/A' }}</li>
+            <li><strong>Birth Date:</strong> {{ patient?.birthDate || 'N/A' }}</li>
+            <li v-if="patient?.address && patient.address.length > 0">
+              <strong>Address:</strong>
+              <ul class="address-list">
+                <li v-if="patient.address[0].country"><strong>Country:</strong> {{ patient.address[0].country }}</li>
+                <li v-if="patient.address[0].city"><strong>City:</strong> {{ patient.address[0].city }}</li>
+                <li v-if="patient.address[0].postalCode"><strong>Postal Code:</strong> {{ patient.address[0].postalCode }}</li>
+                <li v-if="patient.address[0].line"><strong>Street:</strong> {{ patient.address[0].line.join(', ') }}</li>
+              </ul>
+            </li>
+            <li v-for="(entry, index) in socialHistoryEntries" :key="index">
+              <strong>Observation Reference {{ index + 1 }}:</strong> {{ entry.reference }}
+            </li>
+          </ul>
+        </div>
+        </transition>
+      </div>
+
+
+      <!-- Dashboard -->
+      <div class="dashboard">
+        <!-- Left Side: Two Cards -->
+        <div class="dashboard-left">
+          <!-- Card 1 on the Left -->
+          <div class="dashboard-card">
+            <h3>Problems or maybe conditions</h3>
+            <p>Conditions from composition</p>
+          </div>
+
+          <!-- Card 2 on the Left -->
+          <div class="dashboard-card">
+            <h3>Medication</h3>
+            <p>A list of medicine if there are any in the composition</p>
+          </div>
+        </div>
+
+        <!-- Pie Chart -->
+        <div class="dashboard-chart">
+          <canvas id="foodAllergiesChart" width="400" height="400"></canvas>
+        </div>
+
+        <!-- Right Side: Two Cards -->
+        <div class="dashboard-right">
+          <!-- Card 1 on the Right -->
+          <div class="dashboard-card">
+            <h3>All allergies </h3>
+            <p>There are other allergies or intolerances available through the SNOMED CT browser, because of the food inflorescence use-case only food in the graph</p>
+          </div>
+        </div>
+      </div>
+
+
+
+<!--    <div class="card">
       <h2 @click="toggleSection('importantInfo')" style="cursor: pointer;">
         Important Information (Allergies)
       </h2>
@@ -59,7 +117,7 @@
           </tbody>
         </table>
       </div>
-    </div>
+    </div>-->
 
 
     <!-- Card for Encounters with Sorted Table -->
@@ -112,11 +170,12 @@
       </div>
     </div>
   </div>
+  </div>
 </template>
-
 
 <script>
 import axios from 'axios';
+import Chart from 'chart.js/auto';
 
 export default {
   data() {
@@ -124,17 +183,28 @@ export default {
       patient: null,
       encounters: [],
       observations: [],
-      isPatientVisible: false,
+      allergyEntries: [],
+      isPatientVisible: true,
+      selectedLanguage: 'en',
+      isLocked: true,
+      isImportantInfoVisible: true,
       isEncountersVisible: false,
       isObservationsVisible: false,
+
       composition: null,
       observationReference: null,
       socialHistoryEntries: [],
-      isImportantInfoVisible: true,
-      allergyEntries: [],
 
+      allergies: [
+        { type: "Peanuts", value: 40 },
+        { type: "Shellfish", value: 30 },
+        { type: "Milk", value: 20 },
+        { type: "Eggs", value: 10 },
+      ],
     };
   },
+
+
   computed: {
     sortedEncounters() {
       return this.encounters.slice().sort((a, b) => {
@@ -147,18 +217,26 @@ export default {
       });
     }
   },
+  async created() {
+    await this.fetchPatientData();
+    this.fetchOtherData();
+  },
+
+  mounted() {
+    this.renderChart();
+  },
+
   methods: {
     async fetchPatientData() {
       try {
-        // Fetch the Composition resource
-        const patientComposition = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
-        this.composition = patientComposition.data;
-        console.log("getting data")
-        console.log(patientComposition.data.entry[0].resource.section[5].entry[0].reference)
-
-        // Log composition to check its structure
-        console.log("Fetched Composition:", this.composition);
-
+        const response = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
+        this.patient = response.data;
+      } catch (error) {
+        console.error("Error fetching patient data:", error);
+      }
+    },
+    async fetchOtherData() {
+      try {
         const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
         this.patient = patientResponse.data;
 
@@ -168,13 +246,25 @@ export default {
         const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
         this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];
 
+        await this.fetchCompositionData();
         this.fetchSocialHistoryEntries();
         // Fetch Allergies (Important Information)
         this.fetchAllergyData();
-
       } catch (error) {
         console.error("Error fetching data:", error);
       }
+    },
+
+
+    async fetchCompositionData() {
+      // Fetch the Composition resource
+      const patientComposition = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
+      this.composition = patientComposition.data;
+      console.log("getting data")
+      console.log(patientComposition.data.entry[0].resource.section[5].entry[0].reference)
+
+      // Log composition to check its structure
+      console.log("Fetched Composition:", this.composition);
     },
 
     async fetchAllergyDetails(allergyReference) {
@@ -245,27 +335,241 @@ export default {
     },
 
     toggleSection(section) {
-      if (section === 'observations') {
-        this.isObservationsVisible = !this.isObservationsVisible;
+      if (section === 'patient') {
+        this.isPatientVisible = !this.isPatientVisible;
       } else if (section === 'importantInfo') {
         this.isImportantInfoVisible = !this.isImportantInfoVisible;
       } else if (section === 'encounters') {
         this.isEncountersVisible = !this.isEncountersVisible;
-      } else if (section === 'patients') {
-        this.isPatientVisible = !this.isPatientVisible;
+      } else if (section === 'observations') {
+        this.isObservationsVisible = !this.isObservationsVisible;
       }
-    }
-  },
-  mounted() {
-    this.fetchPatientData();
+    },
+    changeLanguage() {
+      console.log("Language changed to:", this.selectedLanguage);
+      // Add logic for handling language change here
+    },
+    toggleLock() {
+      this.isLocked = !this.isLocked;
+      console.log("Lock status:", this.isLocked ? "Locked" : "Unlocked");
+    },
 
+    renderChart() {
+      const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
+
+      new Chart(ctx, {
+        type: "doughnut",
+        data: {
+          labels: this.allergies.map((allergy) => allergy.type),
+          datasets: [
+            {
+              label: "Food Allergies",
+              data: this.allergies.map((allergy) => allergy.value),
+              backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
+              hoverOffset: 10, // Applies when hovering over a segment
+              offset: (context) => {
+                const allergyType = context.chart.data.labels[context.dataIndex];
+                const highlightedAllergies = ["Peanuts", "Shellfish"]; // List of allergies to highlight
+                return highlightedAllergies.includes(allergyType) ? 20 : 0;
+              },
+
+            },
+          ],
+        },
+        options: {
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (tooltipItem) => {
+                  const label = tooltipItem.label || "";
+                  const value = tooltipItem.raw;
+                  return `${label}: ${value}% ${label === "Peanuts" ? "(High Risk)" : ""}`;
+                },
+              },
+            },
+          },
+        },
+      });
+    },
   }
 
-  //TODO: add algorithm as search tree based on structure from ips IG 
+
 };
 </script>
 
 <style scoped>
+
+/* Specific styles for the Patient Information Card */
+.patient-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  background-color: #add8e6; /* Light blue background for patient card */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 60px; /* Sticky just below navbar */
+  z-index: 1000; /* Ensure it stays above other content */
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+/* When the patient card is at the top of the screen */
+.patient-card.sticky {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Card content styling */
+.patient-card h2 {
+  color: #2c3e50;
+  margin: 0;
+}
+
+.patient-card .card-content {
+  margin-top: 10px;
+}
+
+/* Data table inside the patient card */
+.patient-card .data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.patient-card .data-table th,
+.patient-card .data-table td {
+  padding: 10px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.patient-card .data-table th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
+
+/* Container for cards and chart */
+.container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+/* Flex for card and chart */
+.container .chart, .container .card {
+  flex: 1 1 45%;
+  margin: 10px;
+}
+
+/* Navbar Styles */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8f9fa;
+  padding: 10px 20px;
+  border-bottom: 1px solid #ddd;
+  z-index: 1000; /* Navbar stays above all */
+}
+
+/* Navbar content styling */
+.navbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  position: relative;
+  left: -3%;
+}
+
+.language-dropdown {
+  padding: 5px 10px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.lock-icon {
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: #2c3e50;
+}
+
+.lock-icon:hover {
+  color: #007bff;
+}
+
+/* Content below the navbar */
+.content {
+  margin-top: 70px; /* To avoid overlap with the navbar */
+}
+
+/* Transition for expanding patient data */
+.expand-fade-enter-active, .expand-fade-leave-active {
+  transition: max-height 0.5s ease-in-out;
+}
+
+.expand-fade-enter, .expand-fade-leave-to {
+  max-height: 0;
+  overflow: hidden;
+}
+
+/* Dashboard Styling */
+.dashboard {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 60px; /* Adjusted for space between the patient card and the dashboard */
+  padding: 20px;
+}
+
+.dashboard-left,
+.dashboard-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column; /* Stack cards vertically */
+  gap: 20px; /* Space between the cards */
+}
+
+.dashboard-chart {
+  flex: 2;
+  margin: 10px;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+.dashboard-card {
+  padding: 20px;
+  background-color: #f8f9fa;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* Canvas Styles */
+canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Patient Information Card - Sticky */
 .card {
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -274,34 +578,43 @@ export default {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   background-color: #fff;
 }
+
 .card h2 {
   color: #2c3e50;
   margin: 0;
 }
+
+/* Content within the card */
 .card-content {
   margin-top: 10px;
 }
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
 }
+
 .data-table th,
 .data-table td {
   padding: 10px;
   border: 1px solid #ddd;
   text-align: left;
 }
+
 .data-table th {
   background-color: #f5f5f5;
   font-weight: bold;
 }
+
 .data-view {
   list-style-type: none;
   text-align: left;
 }
+
 .address-list {
   list-style-type: none;
   text-align: left;
 }
+
 </style>

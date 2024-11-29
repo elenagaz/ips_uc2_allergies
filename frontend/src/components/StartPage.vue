@@ -123,8 +123,9 @@ export default {
       const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
       this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
 
-      await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
-
+      //testing of this with spanish mexico + if there is no language available uses english term => on the console again
+      await this.translateLoincCode("63486-5", "es-MX")
+      // in the method I translate it to french and use console.log to display it
       await this.fetchAllergyIntolerances();
 
 
@@ -152,8 +153,11 @@ export default {
         console.log(this.extractedData);
       });
       console.log(this.extractedData.allergySnomedCode)
+
+      // this is added to test the translation on the console
       this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'fr')
       console.log(this.extractedData2);
+
     } catch (error) {
       console.error("Error fetching allergy intolerances:", error);
     }
@@ -207,6 +211,7 @@ export default {
     findDisplayNameByLanguage(responseData, languageCode) {
       try {
         // Extract the default English display value (from the 'display' parameter)
+        // if there are no translations in the wanted language - the english one is displayed
         const defaultDisplay = responseData.parameter?.find(param => param.name === 'display')?.valueString;
 
         if (!defaultDisplay) {
@@ -237,9 +242,7 @@ export default {
             }
           }
         }
-
         return translatedValue;
-
       } catch (error) {
         console.error('Error in findDisplayNameByLanguage:', error);
         return 'Error finding display name';
@@ -248,24 +251,21 @@ export default {
 
     // The method that translates a LOINC code to a specific language
     async translateLoincCode(loincCode, language) {
-      const system = 'http://loinc.org'; // Example system
-
+      const system = 'http://loinc.org'; // Link needed
       try {
         const response = await axios.get('http://localhost:5000/proxy', {
           params: { system, loincCode },
         });
+        // Log the entire response data
+        //console.log("LOINC Code Response Data:", response.data);
 
-        console.log("LOINC Code Response Data:", response.data); // Log the entire response data
-
-        // Check if the response contains the 'parameter' field and is an array
         if (response.data && response.data.parameter && Array.isArray(response.data.parameter)) {
-          // Find the 'display' field in the parameter array
           const displayTerm = response.data.parameter.find(param => param.name === 'display');
           if (displayTerm) {
-            //console.log("Display term:", displayTerm.valueString); // Log the display value
+            //printing of the translated value
             let resultingTerm = this.findDisplayNameByLanguage(response.data, language);
             console.log("Translated term: " + resultingTerm);
-            return resultingTerm; // Use findDisplayNameByLanguage to get translated name
+            return resultingTerm;
           } else {
             console.error("Display term not found in the response");
             return null;
@@ -280,14 +280,14 @@ export default {
       }
     },
 
-    // extract term from the response data
+  // extract term from the response data
   extractTerm(data, language) {
     const descriptions = data.items[0].descriptions;
     //find lang = language code in resonse code
     return descriptions.find(desc => desc.lang === language).term;
   },
 
-// toggle visibility of sections
+  // toggle visibility of sections
   toggleSection(section) {
     if (section === 'patient') {
       this.isPatientVisible = !this.isPatientVisible;

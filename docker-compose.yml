@@ -1,9 +1,24 @@
+version: '3'
+
 services:
   vue-app:
     build:
-      context: ./frontend
+      context: ./frontend  # Path to the frontend folder
       dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "8080:80"          # Frontend exposed on port 8080
     environment:
       - NODE_ENV=production
+    depends_on:
+      - node-server         # Ensure backend is up first
+
+  node-server:
+    build:
+      context: ./backend   # Path to the backend folder
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"         # Backend exposed on port 5000
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./backend:/app      # Mount backend code into the container

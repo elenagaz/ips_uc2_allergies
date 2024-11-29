@@ -201,6 +201,9 @@ export default {
         { type: "Milk", value: 20 },
         { type: "Eggs", value: 10 },
       ],
+
+      chart: null, // We'll use this to store the chart instance
+
     };
   },
 
@@ -225,6 +228,7 @@ export default {
   mounted() {
     this.renderChart();
   },
+
 
   methods: {
     async fetchPatientData() {
@@ -355,9 +359,14 @@ export default {
     },
 
     renderChart() {
+      // Destroy the previous chart instance if it exists
+      if (this.chart) {
+        this.chart.destroy();
+      }
+
       const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
 
-      new Chart(ctx, {
+      this.chart = new Chart(ctx, {
         type: "doughnut",
         data: {
           labels: this.allergies.map((allergy) => allergy.type),
@@ -391,6 +400,7 @@ export default {
         },
       });
     },
+
   }
 
 
@@ -414,9 +424,7 @@ export default {
 }
 
 /* When the patient card is at the top of the screen */
-.patient-card.sticky {
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
+
 
 /* Card content styling */
 .patient-card h2 {
@@ -447,16 +455,9 @@ export default {
   font-weight: bold;
 }
 
-/* Container for cards and chart */
-.container {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  margin-top: 20px;
-}
 
 /* Flex for card and chart */
-.container .chart, .container .card {
+.container .card {
   flex: 1 1 45%;
   margin: 10px;
 }
@@ -514,36 +515,23 @@ export default {
   color: #007bff;
 }
 
-/* Content below the navbar */
-.content {
-  margin-top: 70px; /* To avoid overlap with the navbar */
-}
-
-/* Transition for expanding patient data */
-.expand-fade-enter-active, .expand-fade-leave-active {
-  transition: max-height 0.5s ease-in-out;
-}
-
-.expand-fade-enter, .expand-fade-leave-to {
-  max-height: 0;
-  overflow: hidden;
-}
-
 /* Dashboard Styling */
 .dashboard {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-top: 60px; /* Adjusted for space between the patient card and the dashboard */
+  align-items: flex-start; /* Align items to the top */
+  margin-top: 0px; /* Adjusted for navbar */
   padding: 20px;
 }
 
-.dashboard-left,
-.dashboard-right {
+.dashboard-card {
   flex: 1;
-  display: flex;
-  flex-direction: column; /* Stack cards vertically */
-  gap: 20px; /* Space between the cards */
+  margin: 10px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  text-align: center;
 }
 
 .dashboard-chart {
@@ -553,20 +541,31 @@ export default {
   background-color: #fff;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 600px; /* Limit the max width */
+  width: 100%; /* Ensure the chart fits within the container */
 }
 
-.dashboard-card {
-  padding: 20px;
-  background-color: #f8f9fa;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  text-align: center;
+.dashboard-chart canvas {
+  width: 80% !important; /* Make the canvas width smaller */
+  height: 80% !important; /* Ensure height is proportionate */
 }
 
-/* Canvas Styles */
 canvas {
   display: block;
   margin: 0 auto;
+  width: auto; /* Make the canvas width responsive */
+  height: auto; /* Allow the height to adjust accordingly */
+}
+
+.dashboard-left,
+.dashboard-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column; /* Stack cards vertically */
+  gap: 20px; /* Space between the cards */
 }
 
 /* Patient Information Card - Sticky */

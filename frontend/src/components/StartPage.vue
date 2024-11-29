@@ -600,8 +600,7 @@ export default {
   extractTerm(data, language) {
     const descriptions = data.items[0].descriptions;
     //find lang = language code in resonse code
-    const term = descriptions.find(desc => desc.lang === language).term;
-    return term;
+    return descriptions.find(desc => desc.lang === language).term;
   },
 
     formatAddress(address) {

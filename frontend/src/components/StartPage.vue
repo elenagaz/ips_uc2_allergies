@@ -123,7 +123,10 @@ export default {
       const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
       this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
 
+      await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
+
       await this.fetchAllergyIntolerances();
+
 
 
     } catch (error) {
@@ -200,15 +203,92 @@ export default {
     }
   },
 
-  // extract term from the response data
+    // The method that finds the display name based on language
+    findDisplayNameByLanguage(responseData, languageCode) {
+      try {
+        // Extract the default English display value (from the 'display' parameter)
+        const defaultDisplay = responseData.parameter?.find(param => param.name === 'display')?.valueString;
+
+        if (!defaultDisplay) {
+          console.error('Default display name not found in the response data.');
+          return 'No display available';
+        }
+
+        // Look for the 'designation' array to find translations
+        const designationParts = responseData.parameter?.filter(param => param.name === 'designation');
+
+        // If no designation is found, return the default display value (English name)
+        if (!designationParts || designationParts.length === 0) {
+          console.warn('No designation translations found, returning default display value');
+          return defaultDisplay;
+        }
+
+        // Try to find the translation for the specified language
+        let translatedValue = defaultDisplay; // Start with default display value
+        for (let part of designationParts) {
+          const languagePart = part.part?.find(item => item.name === 'language' && item.valueCode === languageCode);
+
+          if (languagePart) {
+            // If the language is found, override the translated value
+            const valuePart = part.part?.find(item => item.name === 'value' && item.valueString);
+            if (valuePart) {
+              translatedValue = valuePart.valueString;
+              break; // Break the loop once translation is found
+            }
+          }
+        }
+
+        return translatedValue;
+
+      } catch (error) {
+        console.error('Error in findDisplayNameByLanguage:', error);
+        return 'Error finding display name';
+      }
+    },
+
+    // The method that translates a LOINC code to a specific language
+    async translateLoincCode(loincCode, language) {
+      const system = 'http://loinc.org'; // Example system
+
+      try {
+        const response = await axios.get('http://localhost:5000/proxy', {
+          params: { system, loincCode },
+        });
+
+        console.log("LOINC Code Response Data:", response.data); // Log the entire response data
+
+        // Check if the response contains the 'parameter' field and is an array
+        if (response.data && response.data.parameter && Array.isArray(response.data.parameter)) {
+          // Find the 'display' field in the parameter array
+          const displayTerm = response.data.parameter.find(param => param.name === 'display');
+          if (displayTerm) {
+            //console.log("Display term:", displayTerm.valueString); // Log the display value
+            let resultingTerm = this.findDisplayNameByLanguage(response.data, language);
+            console.log("Translated term: " + resultingTerm);
+            return resultingTerm; // Use findDisplayNameByLanguage to get translated name
+          } else {
+            console.error("Display term not found in the response");
+            return null;
+          }
+        } else {
+          console.error("Unexpected response structure or empty 'parameter' array");
+          return null;
+        }
+      } catch (error) {
+        console.error(`Error fetching LOINC code translation: ${error}`);
+        return null;
+      }
+    },
+
+    // extract term from the response data
   extractTerm(data, language) {
     const descriptions = data.items[0].descriptions;
     //find lang = language code in resonse code
     const term = descriptions.find(desc => desc.lang === language).term;
     return term;
   },
-  
-  // toggle visibility of sections
+
+// toggle visibility of sections
   toggleSection(section) {
     if (section === 'patient') {
       this.isPatientVisible = !this.isPatientVisible;

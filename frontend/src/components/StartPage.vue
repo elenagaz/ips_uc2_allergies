@@ -31,25 +31,43 @@
         </h2>
         <transition name="expand-fade">
         <div v-if="isPatientVisible" class="card-content">
-          <ul class="data-view">
-            <li><strong>Name:</strong> {{ patient?.name?.[0]?.given?.join(' ') || 'N/A' }}</li>
-            <li><strong>Last Name:</strong> {{ patient?.name?.[0]?.family || 'N/A' }}</li>
-            <li><strong>ID:</strong> {{ patient?.id || 'N/A' }}</li>
-            <li><strong>Gender:</strong> {{ patient?.gender || 'N/A' }}</li>
-            <li><strong>Birth Date:</strong> {{ patient?.birthDate || 'N/A' }}</li>
-            <li v-if="patient?.address && patient.address.length > 0">
-              <strong>Address:</strong>
-              <ul class="address-list">
-                <li v-if="patient.address[0].country"><strong>Country:</strong> {{ patient.address[0].country }}</li>
-                <li v-if="patient.address[0].city"><strong>City:</strong> {{ patient.address[0].city }}</li>
-                <li v-if="patient.address[0].postalCode"><strong>Postal Code:</strong> {{ patient.address[0].postalCode }}</li>
-                <li v-if="patient.address[0].line"><strong>Street:</strong> {{ patient.address[0].line.join(', ') }}</li>
-              </ul>
-            </li>
-            <li v-for="(entry, index) in socialHistoryEntries" :key="index">
-              <strong>Observation Reference {{ index + 1 }}:</strong> {{ entry.reference }}
-            </li>
-          </ul>
+          <!-- First Row -->
+          <div class="info-row">
+            <div class="info-label">
+              <label>Name:</label>
+              <span>{{ patient?.name?.[0]?.given?.join(' ') || 'N/A' }}</span>
+            </div>
+            <div class="info-label">
+              <label>Last Name:</label>
+              <span>{{ patient?.name?.[0]?.family || 'N/A' }}</span>
+            </div>
+            <div class="info-label">
+              <label>ID:</label>
+              <span>{{ patient?.id || 'N/A' }}</span>
+            </div>
+          </div>
+          <!-- Second Row -->
+          <div class="info-row">
+            <div class="info-label">
+              <label>Gender:</label>
+              <span>{{ patient?.gender || 'N/A' }}</span>
+            </div>
+            <div class="info-label">
+              <label>Birth Date:</label>
+              <span>{{ patient?.birthDate || 'N/A' }}</span>
+            </div>
+            <div v-if="patient?.address && patient.address.length > 0" class="info-label">
+              <label>Address:</label>
+              <span>{{ formatAddress(patient.address[0]) || 'N/A' }}</span>
+            </div>
+          </div>
+          <!-- Last Row: Social History -->
+          <div v-for="(entry, index) in socialHistoryEntries" :key="index" class="info-row">
+            <div class="info-label">
+              <label>Observation Reference {{ index + 1 }}:</label>
+              <span>{{ entry.reference || 'N/A' }}</span>
+            </div>
+          </div>
         </div>
         </transition>
       </div>
@@ -72,14 +90,13 @@
           </div>
         </div>
 
-        <!-- Pie Chart -->
+        <!-- Chart -->
         <div class="dashboard-chart">
           <canvas id="foodAllergiesChart" width="400" height="400"></canvas>
         </div>
 
-        <!-- Right Side: Two Cards -->
+        <!-- Right Side-->
         <div class="dashboard-right">
-          <!-- Card 1 on the Right -->
           <div class="dashboard-card">
             <h3>All allergies </h3>
             <p>There are other allergies or intolerances available through the SNOMED CT browser, because of the food inflorescence use-case only food in the graph</p>
@@ -202,7 +219,7 @@ export default {
         { type: "Eggs", value: 10 },
       ],
 
-      chart: null, // We'll use this to store the chart instance
+      chart: null,
 
     };
   },
@@ -252,7 +269,8 @@ export default {
 
         await this.fetchCompositionData();
         this.fetchSocialHistoryEntries();
-        // Fetch Allergies (Important Information)
+
+        // Fetch Allergies (Important Information) //TODO: maybe remove
         this.fetchAllergyData();
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -338,6 +356,27 @@ export default {
       }
     },
 
+    formatAddress(address) {
+      let addressString = '';
+
+      if (address.country) {
+        addressString += address.country;
+      }
+      if (address.city) {
+        if (addressString) addressString += ', ';
+        addressString += address.city;
+      }
+      if (address.postalCode) {
+        if (addressString) addressString += ', ';
+        addressString += address.postalCode;
+      }
+      if (address.line) {
+        if (addressString) addressString += ', ';
+        addressString += address.line.join(', ');
+      }
+      return addressString || 'N/A'; // Return 'N/A' if no address data is available
+    },
+
     toggleSection(section) {
       if (section === 'patient') {
         this.isPatientVisible = !this.isPatientVisible;
@@ -351,15 +390,14 @@ export default {
     },
     changeLanguage() {
       console.log("Language changed to:", this.selectedLanguage);
-      // Add logic for handling language change here
+      // TODO: add functionality for changing the language
     },
     toggleLock() {
       this.isLocked = !this.isLocked;
-      console.log("Lock status:", this.isLocked ? "Locked" : "Unlocked");
+      //console.log("Lock status:", this.isLocked ? "Locked" : "Unlocked");
     },
 
     renderChart() {
-      // Destroy the previous chart instance if it exists
       if (this.chart) {
         this.chart.destroy();
       }
@@ -423,9 +461,6 @@ export default {
   transition: box-shadow 0.3s ease-in-out;
 }
 
-/* When the patient card is at the top of the screen */
-
-
 /* Card content styling */
 .patient-card h2 {
   color: #2c3e50;
@@ -454,7 +489,6 @@ export default {
   background-color: #f5f5f5;
   font-weight: bold;
 }
-
 
 /* Flex for card and chart */
 .container .card {
@@ -606,14 +640,44 @@ canvas {
   font-weight: bold;
 }
 
-.data-view {
-  list-style-type: none;
-  text-align: left;
+/* Container for each label and its corresponding information */
+.info-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px; /* Space between rows */
 }
 
-.address-list {
-  list-style-type: none;
-  text-align: left;
+/* Styling for labels */
+.info-label {
+  display: flex;
+  align-items: center;
+  margin-right: 20px; /* Space between label and value */
+  font-size: 1rem; /* Same size for both label and value */
+  width: 30%; /* Controls the width for both label and value */
+}
+
+.info-label label {
+  font-weight: bold;
+  margin-right: 8px; /* Space between label and value */
+  white-space: nowrap; /* Prevent labels from wrapping */
+}
+
+.info-label span {
+  font-size: 1rem; /* Same size for value */
+  word-wrap: break-word; /* Ensure long values don't break the layout */
+  width: auto;
+}
+
+.card-content {
+  margin-bottom: 1px;
+}
+
+.card-content .info-row:last-child .info-label {
+  width: auto; /* Allow the value to expand */
+}
+
+.card-content .info-row:last-child {
+  margin-bottom: 0;
 }
 
 </style>

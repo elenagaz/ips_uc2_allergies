@@ -64,8 +64,12 @@
           <!-- Last Row: Social History -->
           <div v-for="(entry, index) in socialHistoryEntries" :key="index" class="info-row">
             <div class="info-label">
-              <label>Observation Reference {{ index + 1 }}:</label>
-              <span>{{ entry.reference || 'N/A' }}</span>
+              <label>Additional Information:</label>
+              <!-- Displaying the code and the note if it exists -->
+              <span>
+                {{ entry.code?.coding?.[0]?.display || 'N/A' }}
+                <span v-if="entry.note?.[0]?.text">, {{ entry.note[0].text }}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -79,14 +83,68 @@
         <div class="dashboard-left">
           <!-- Card 1 on the Left -->
           <div class="dashboard-card">
-            <h3>Problems or maybe conditions</h3>
-            <p>Conditions from composition</p>
+            <h3>Conditions</h3>
+            <!-- Check if allergy data exists -->
+            <!-- Check if condition data exists -->
+            <div v-if="conditions && conditions.length > 0">
+              <table class="medication-table">
+                <thead>
+                <tr>
+                  <th>Condition</th>
+                  <th>Status</th>
+                  <th>Severity</th>
+                  <th>Onset Date</th>
+                  <th>Condition Code</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr v-for="condition in conditions" :key="condition.id">
+                  <td>{{ condition.code.coding[0].display || 'N/A'}}</td> <!--can be translated-->
+                  <td>{{ condition.clinicalStatus.coding[0].code || 'N/A'}}</td>
+                  <td>{{ condition.severity.coding[0].display }}</td>
+                  <td>{{ condition.onsetDateTime || 'N/A'}}</td>
+                  <td>{{ condition.code.coding[0].code || 'N/A'}}</td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- If no conditions or conditions are available -->
+            <div v-else>
+              <p>No conditions or conditions available</p>
+            </div>
           </div>
 
           <!-- Card 2 on the Left -->
           <div class="dashboard-card">
             <h3>Medication</h3>
-            <p>A list of medicine if there are any in the composition</p>
+            <div v-if="medications && medications.length > 0">
+              <table class="medication-table">
+                <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Reason</th>
+                  <th>Code</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr v-for="medication in medications" :key="medication.id">
+                  <td>{{ medication.medicationCodeableConcept.coding[0].display || 'N/A'}}</td> <!--can be translated-->
+                  <td>{{ medication.status || 'N/A'}}</td>
+                  <td>{{ medication.effectiveDateTime || 'N/A'}}</td>
+                  <td>{{ medication.reasonCode[0]?.coding[0]?.display || 'N/A' }}</td>
+                  <td>{{ medication.medicationCodeableConcept.coding[0].code || 'N/A'}}</td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- If no medications are available -->
+            <div v-else>
+              <p>No medication available</p>
+            </div>
           </div>
         </div>
 
@@ -162,7 +220,7 @@
       </div>
     </div>
 
-    <!-- Card for Observations with Sorted Table -->
+<!--    &lt;!&ndash; Card for Observations with Sorted Table &ndash;&gt;
     <div class="card">
       <h2 @click="toggleSection('observations')" style="cursor: pointer;">
         Observations
@@ -185,32 +243,49 @@
           </tbody>
         </table>
       </div>
-    </div>
+    </div>-->
+
   </div>
+
+
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import Chart from 'chart.js/auto';
+import {
+  extractMedication,
+  extractConditions,
+  getPatientData,
+  processComposition,
+  fetchSocialHistoryEntries
+} from "@/services/apiService";
+
 
 export default {
   data() {
     return {
       patient: null,
       encounters: [],
-      observations: [],
+      //observations: [],
       allergyEntries: [],
       isPatientVisible: true,
       selectedLanguage: 'en',
       isLocked: true,
       isImportantInfoVisible: true,
-      isEncountersVisible: false,
-      isObservationsVisible: false,
+      isEncountersVisible: true,
+      //isObservationsVisible: false,
 
       composition: null,
+      composition2: null,
+
       observationReference: null,
       socialHistoryEntries: [],
+
+      medications: [],
+      conditions: [],
+
 
       allergies: [
         { type: "Peanuts", value: 40 },
@@ -237,9 +312,14 @@ export default {
       });
     }
   },
+
   async created() {
-    await this.fetchPatientData();
-    this.fetchOtherData();
+    this.patient = await getPatientData();
+    await this.fetchOtherData();
+    this.composition2 = await processComposition();
+    this.medications = await extractMedication(this.composition2)
+    this.conditions = await extractConditions(this.composition2);
+    this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
   },
 
   mounted() {
@@ -248,27 +328,27 @@ export default {
 
 
   methods: {
-    async fetchPatientData() {
+/*    async fetchPatientData() {
       try {
         const response = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
         this.patient = response.data;
       } catch (error) {
         console.error("Error fetching patient data:", error);
       }
-    },
+    },*/
     async fetchOtherData() {
       try {
-        const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
-        this.patient = patientResponse.data;
+       /* const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
+        this.patient = patientResponse.data;*/
 
         const encountersResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Encounter?patient=UC2-Patient');
         this.encounters = encountersResponse.data.entry?.map(entry => entry.resource) || [];
 
-        const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
-        this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];
+        /*const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
+        this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];*/
 
-        await this.fetchCompositionData();
-        this.fetchSocialHistoryEntries();
+        //await this.fetchCompositionData();
+        //this.fetchSocialHistoryEntries();
 
         // Fetch Allergies (Important Information) //TODO: maybe remove
         this.fetchAllergyData();
@@ -278,7 +358,7 @@ export default {
     },
 
 
-    async fetchCompositionData() {
+/*    async fetchCompositionData() {
       // Fetch the Composition resource
       const patientComposition = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
       this.composition = patientComposition.data;
@@ -287,7 +367,7 @@ export default {
 
       // Log composition to check its structure
       console.log("Fetched Composition:", this.composition);
-    },
+    },*/
 
     async fetchAllergyDetails(allergyReference) {
       try {
@@ -330,33 +410,10 @@ export default {
       });
     },
 
-    fetchSocialHistoryEntries() {
-      if (!this.composition || !this.composition.entry) {
-        console.warn("Composition data or entries are not available.");
-        return;
-      }
 
-      // Initialize social history entries as an empty array
-      this.socialHistoryEntries = [];
-
-      // Loop through the composition sections to find social history related references
-      this.composition.entry[0].resource.section.forEach((section) => {
-        if (section.title && section.title.includes('Social History')) {
-          // Iterate over the entries in the section and collect references
-          section.entry.forEach((entry) => {
-            if (entry.reference) {
-              this.socialHistoryEntries.push(entry);
-            }
-          });
-        }
-      });
-
-      if (this.socialHistoryEntries.length === 0) {
-        console.warn("No social history entries found.");
-      }
-    },
 
     formatAddress(address) {
+      // TODO: make it flexible if there is other data saved
       let addressString = '';
 
       if (address.country) {
@@ -554,7 +611,7 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: flex-start; /* Align items to the top */
-  margin-top: 0px; /* Adjusted for navbar */
+  margin-top: 0 ; /* Adjusted for navbar */
   padding: 20px;
 }
 
@@ -678,6 +735,78 @@ canvas {
 
 .card-content .info-row:last-child {
   margin-bottom: 0;
+}
+
+.dashboard-card h3 {
+  margin-top: 0;
+}
+
+.medication-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.medication-table th, .medication-table td {
+  padding: 10px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.medication-table th {
+  background-color: #f1f1f1;
+  font-weight: bold;
+}
+
+.medication-table td {
+  background-color: #fff;
+}
+
+.medication-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.medication-table td a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.medication-table td a:hover {
+  text-decoration: underline;
+}
+
+.condition-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.condition-table th, .condition-table td {
+  padding: 10px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.condition-table th {
+  background-color: #f1f1f1;
+  font-weight: bold;
+}
+
+.condition-table td {
+  background-color: #fff;
+}
+
+.condition-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.condition-table td a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.condition-table td a:hover {
+  text-decoration: underline;
 }
 
 </style>

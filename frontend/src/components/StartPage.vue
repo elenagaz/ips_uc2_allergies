@@ -354,6 +354,7 @@ export default {
 
       selectedEncounter: null,
       observations: [],
+      isObservationsVisible: false,
       compositionSections: [],
       //isObservationsVisible: false,
       isEncountersVisible: true,

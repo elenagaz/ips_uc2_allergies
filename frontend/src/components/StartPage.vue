@@ -107,7 +107,6 @@
               </table>
             </div>
 
-            <!-- If no conditions or conditions are available -->
             <div v-else>
               <p>No conditions or conditions available</p>
             </div>
@@ -146,7 +145,7 @@
 
         <!-- Chart -->
         <div class="dashboard-chart">
-          <h3>Food Allergies Chart</h3> <!-- Title for the chart -->
+          <h3>Food Allergies Chart</h3>
           <canvas id="foodAllergiesChart"></canvas>
         </div>
 
@@ -159,37 +158,6 @@
         </div>
       </div>
 
-
-
-<!--    <div class="card">
-      <h2 @click="toggleSection('importantInfo')" style="cursor: pointer;">
-        Important Information (Allergies)
-      </h2>
-      <div v-if="isImportantInfoVisible" class="card-content">
-        <table class="data-table">
-          <thead>
-          <tr>
-            <th>Type</th>
-            <th>Criticality</th>
-            <th>Date</th>
-            <th>Confirmed</th>
-            <th>Symptoms</th>
-            <th>Severity</th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr v-for="(allergy, index) in allergyEntries" :key="index">
-            <td>{{ allergy.type || 'N/A' }}</td>
-            <td>{{ allergy.criticality || 'N/A' }}</td>
-            <td>{{ allergy.date || 'N/A' }}</td>
-            <td>{{ allergy.confirmed || 'N/A' }}</td>
-            <td>{{ allergy.symptoms || 'N/A' }}</td>
-            <td>{{ allergy.severity || 'N/A' }}</td>
-          </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>-->
       <div>
         <!-- Card for Encounters with Sorted Table -->
         <div class="card">
@@ -204,7 +172,7 @@
                 <th>Type</th>
                 <th>Reason</th>
                 <th>Status</th>
-                <th style="width: 50px;"> <!-- Flag Column with no styling here -->
+                <th style="width: 50px;">
                   <span>Flag</span>
                 </th>
               </tr>
@@ -235,11 +203,11 @@
             v-if="selectedEncounter"
             class="detail-card"
             style="background-color: #cfe6e6; padding: 20px; margin-top: 20px; border-radius: 8px; position: relative;">
-          <!-- Close Button (X) -->
+          <!-- Close Button -->
           <button
               @click="selectedEncounter = null"
               style="background: none; border: none; color: #333; font-size: 30px; position: absolute; top: 15px; right: 20px; cursor: pointer;">
-            &times; <!-- "X" -->
+            &times;
           </button>
 
           <h3>Details for Encounter: {{ selectedEncounter.id?.split('-').pop() || 'N/A' }}</h3>
@@ -299,7 +267,7 @@
                 <th>Date</th>
                 <th>Type</th>
                 <th>Interpretation</th>
-                <th>Value</th> <!-- Add new column for Value -->
+                <th>Value</th>
                 <th>Notes</th>
               </tr>
               </thead>
@@ -314,9 +282,9 @@
                 </td>
                 <!-- Display valueQuantity if available -->
                 <td style="background-color: white;">
-          <span v-if="obs.valueQuantity">
-            {{ obs.valueQuantity.value || 'N/A' }} {{ obs.valueQuantity.code || 'N/A' }}
-          </span>
+                  <span v-if="obs.valueQuantity">
+                    {{ obs.valueQuantity.value || 'N/A' }} {{ obs.valueQuantity.code || 'N/A' }}
+                  </span>
                   <span v-else>N/A</span>
                 </td>
                 <td style="background-color: white;">{{ obs.note?.[0]?.text || 'No notes available' }}</td>
@@ -327,32 +295,6 @@
         </div>
       </div>
     </div>
-
-        <!--    &lt;!&ndash; Card for Observations with Sorted Table &ndash;&gt;
-            <div class="card">
-              <h2 @click="toggleSection('observations')" style="cursor: pointer;">
-                Observations
-              </h2>
-              <div v-if="isObservationsVisible" class="card-content">
-                <table class="data-table">
-                  <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Value</th>
-                    <th>Date</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  <tr v-for="(observation, index) in sortedObservations" :key="index">
-                    <td>{{ observation.id || 'N/A' }}</td>
-                    <td>{{ observation.valueQuantity?.value || observation.note || observation.value ||'N/A' }} {{ observation.valueQuantity?.code || '' }}</td>
-                    <td>{{ observation.effectiveDateTime || 'N/A' }}</td>
-                  </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>-->
-
   </div>
 
   <div v-if="popOutVisible" class="pop-out-overlay" @click="closePopOut">
@@ -364,11 +306,9 @@
     </div>
   </div>
 
-
 </template>
 
 <script>
-import axios from 'axios';
 import Chart from 'chart.js/auto';
 import {
   extractConditions,
@@ -389,7 +329,6 @@ export default {
     return {
       patient: null,
       encounters: [],
-      //observations: [],
       allergyEntries: [],
       isPatientVisible: true,
       selectedLanguage: 'en',
@@ -422,14 +361,12 @@ export default {
     };
   },
 
-
   computed: {
     sortedEncounters() {
       return this.encounters.slice().sort((a, b) => {
         return new Date(b.period?.start || 0) - new Date(a.period?.start || 0);
       });
     },
-
     vitalSignObservations() {
       if (!this.selectedEncounter || !this.groupedObservations[this.selectedEncounter.id]) {
         return [];
@@ -445,10 +382,8 @@ export default {
 
   },
 
-
   async created() {
     try {
-      // Fetch patient and other data as you already do
       this.patient = await getPatientData();
       await this.fetchOtherData();
       this.composition2 = await processComposition();
@@ -456,7 +391,6 @@ export default {
       this.conditions = await extractConditions(this.composition2);
       this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
 
-      // Fetch encounters and observations
       const encountersResponse = await getEncounters();
       if (encountersResponse && encountersResponse.encounterIds && encountersResponse.encounterObjects) {
         const { encounterIds, encounterObjects } = encountersResponse;
@@ -492,19 +426,17 @@ export default {
         };
       });
 
-
     } catch (error) {
       console.error('Error in created lifecycle hook:', error);
     }
   },
 
-
   mounted() {
     this.renderChart();
   },
 
-
   methods: {
+
     async fetchOtherData() {
       try {
         // Fetch Allergies (Important Information) //TODO: maybe remove
@@ -513,49 +445,6 @@ export default {
         console.error("Error fetching data:", error);
       }
     },
-
-    async fetchAllergyDetails(allergyReference) {
-      try {
-        const allergyResponse = await axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/AllergyIntolerance/${allergyReference.split('/')[1]}`);
-        const allergy = allergyResponse.data;
-
-        console.log(allergy.reaction[0])
-        this.allergyEntries.push({
-          type: allergy.code.coding[0].display || 'N/A',
-          criticality: allergy.criticality || 'N/A',
-          date: allergy.onsetDateTime || 'N/A',
-          confirmed: allergy.verificationStatus.coding[0].code || 'N/A',
-          symptoms: allergy.reaction[0].manifestation[0].coding[0].display || 'N/A',
-          severity: allergy.reaction[0].severity || 'N/A',
-        });
-      } catch (error) {
-        console.error(`Error fetching allergy details for reference ${allergyReference}:`, error);
-      }
-    },
-
-    fetchAllergyData() {
-      if (!this.composition || !this.composition.entry) {
-        console.warn("Composition data or entries are not available.");
-        return;
-      }
-
-      // Initialize allergy entries array as empty
-      this.allergyEntries = [];
-
-      // Loop through the composition sections and look for the Allergies section
-      this.composition.entry[0].resource.section.forEach((section) => {
-        if (section.title && section.title.includes('Allergies')) {
-          section.entry.forEach((entry) => {
-            if (entry.reference) {
-              this.fetchAllergyDetails(entry.reference);
-              console.log(entry.reference)
-            }
-          });
-        }
-      });
-    },
-
-
 
     formatAddress(address) {
       // TODO: make it flexible if there is other data saved
@@ -640,10 +529,8 @@ export default {
                       ? "#C0C0C0" // Gray-out for disabled
                       : [
                         "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0",
-                        "#FF9F40", "#9966FF", "#FF5733", "#33FF57",
-                        "#3380FF", "#FFC300", "#C70039", "#900C3F",
-                        "#DAF7A6", "#581845", "#00BFFF",
-                      ][Math.floor(Math.random() * 15)] // Assign random colors to active segments
+                        "#FF9F40", "#9966FF", "#FF5733",
+                      ][Math.floor(Math.random() * 7)] // Assign random colors to active segments
               ),
               hoverOffset: 10,
             },
@@ -697,8 +584,6 @@ export default {
       });
     },
 
-
-
     openPopOut(allergyType, allergyValue) {
       this.selectedAllergy = allergyType;
       this.selectedValue = allergyValue;
@@ -724,56 +609,6 @@ export default {
       }
 
       this.selectedEncounter = encounter;
-    },
-    getObservationTitle(obs) {
-      // Customize this method to extract a suitable title for the observation
-      return obs.code?.coding?.[0]?.display || 'Unknown Observation';
-    },
-
-    async onEncounterRowClick(encounterId) {
-      console.log(`Selected encounter ID: ${encounterId}`);
-      try {
-        // Fetch observations for the selected encounter ID
-        const groupedObservations = await this.getObservationsByEncounterIds([encounterId]);
-
-        // Log the grouped observations to ensure they are correctly retrieved
-        console.log('Grouped Observations for this encounter:', groupedObservations);
-
-        // Set the selected encounter's observations
-        this.selectedEncounterObservations = groupedObservations[encounterId] || [];
-      } catch (error) {
-        console.error('Error fetching grouped observations:', error);
-      }
-    },
-
-// Close the card by setting selectedEncounter to null
-    closeCard() {
-      this.selectedEncounter = null;
-    },
-
-    testObservations() {
-      // Filter for observations that are not Vital Signs (i.e., the id does not contain "VitalSign")
-      return this.filteredObservations.filter(obs => !obs.id.includes('VitalSign'));
-    },
-    vitalSignsObservations() {
-      // Filter for observations that have "VitalSign" in the id
-      return this.filteredObservations.filter(obs => obs.id.includes('VitalSign'));
-    },
-
-    getRowStyle(component) {
-      // Check if the interpretation is 'high' for the component
-      if (component.interpretation && component.interpretation[0]?.coding[0]?.display.toLowerCase() === 'high') {
-        return { backgroundColor: 'red', color: 'white' }; // High interpretation - Red background
-      }
-      return {}; // Default (no highlight) for other interpretations
-    },
-
-    // For other observations (tests), highlight rows if interpretation is 'high'
-    getRowStyleForTests(obs) {
-      if (obs.interpretation && obs.interpretation[0]?.coding[0]?.display.toLowerCase() === 'high') {
-        return { backgroundColor: 'red', color: 'white' }; // High interpretation - Red background
-      }
-      return {}; // Default (no highlight) for other interpretations
     },
 
     isHigh(obs) {
@@ -947,9 +782,6 @@ export default {
   height: 80% !important; /* Fixed height for consistent layout */
   margin-top: 5px; /* Optional: add space between the title and the graph */
 }
-
-
-
 .dashboard-left,
 .dashboard-right {
   flex: 1;
@@ -1168,7 +1000,4 @@ button:hover {
 .close-button:hover {
   background-color: #d9363e;
 }
-
-
-
 </style>

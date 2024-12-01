@@ -309,6 +309,7 @@
 </template>
 
 <script>
+import axios from 'axios';
 import Chart from 'chart.js/auto';
 import {
   extractConditions,
@@ -334,7 +335,6 @@ export default {
       selectedLanguage: 'en',
       isLocked: true,
       isImportantInfoVisible: true,
-      isEncountersVisible: true,
       composition: null,
       composition2: null,
 
@@ -354,6 +354,12 @@ export default {
 
       selectedEncounter: null,
       observations: [],
+      isObservationsVisible: false,
+      compositionSections: [],
+      //isObservationsVisible: false,
+      isEncountersVisible: true,
+      allergyIntolerancesTranslated: [],
+      extractedData: [],
       encounterIds: [],
       groupedObservations: [],
       selectedEncounterObservations: {}
@@ -385,7 +391,7 @@ export default {
   async created() {
     try {
       this.patient = await getPatientData();
-      await this.fetchOtherData();
+      await this.fetchPatientData();
       this.composition2 = await processComposition();
       this.medications = await extractMedication(this.composition2);
       this.conditions = await extractConditions(this.composition2);
@@ -430,21 +436,172 @@ export default {
       console.error('Error in created lifecycle hook:', error);
     }
   },
+  methods: {
+  async fetchPatientData() {
+    try {
+      const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
+      this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
 
-  mounted() {
-    this.renderChart();
+      await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
+
+      await this.fetchAllergyIntolerances(); //TODO: maybe remove
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
   },
 
-  methods: {
+  // fetch allergy intolerances from the allergy reference in the composition resource
+  async fetchAllergyIntolerances() {
+    try {
+      const allergyReferences = this.extractAllergyIntoleranceReferences();
+      const allergyIntolerances = await Promise.all(
+        allergyReferences.map(ref => axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/${ref}`))
+      );
+      this.allergyIntolerances = allergyIntolerances.map(response => response.data);
+      this.allergyIntolerances.forEach(allergy => {
+        //TODO: put relevant data into diagram e.g. color code criticality here
 
-    async fetchOtherData() {
+        let
+        extractedData;
+        extractedData = this.extractAllergyIntoleranceData(allergy);
+        this.extractedData = extractedData;
+        console.log(this.extractedData);
+      });
+      console.log(this.extractedData.allergySnomedCode)
+
+      // this is added to test the translation on the console
+      this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'fr')
+      console.log(this.extractedData2);
+
+    } catch (error) {
+      console.error("Error fetching allergy intolerances:", error);
+    }
+  },
+
+  // extract reference to allergy intolerance resources from the composition resource
+  extractAllergyIntoleranceReferences() {
+    const allergySection = this.compositionSections.find(section => section.title === 'Allergies Summary');
+    if (!allergySection) return [];
+    return allergySection.entry
+      .filter(entry => entry.reference.startsWith('AllergyIntolerance'))
+      .map(entry => entry.reference);
+  },
+
+  // extract relevant data from allergy intolerance resources
+  extractAllergyIntoleranceData(allergy) {
+    const allergySnomedCode = allergy.code?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+    const criticality = allergy.criticality || null;
+    const manifestationSnomedCode = allergy.reaction?.[0]?.manifestation?.[0]?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+    const encounterReference = allergy.encounter?.reference || null;
+
+    return {
+      allergySnomedCode,
+      criticality,
+      manifestationSnomedCode,
+      encounterReference
+    };
+  },
+
+  // translate SNOMED code to human-readable term according to the specified language
+  // possible languages: Spanish: 'es' , English: 'en', French: 'fr', German 'de' (German is limited and does not work)
+  async  translateSnomedCode(snomedCode, language) {
+    const endpoints = {
+        es: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-ES/2024-09-30/concepts?size=1&conceptIds=${snomedCode}`,
+        en: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts?size=1&conceptIds=${snomedCode}`,
+        fr: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-FR/2024-06-21/concepts?size=1&conceptIds=${snomedCode}`,
+        de: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-DE/2024-05-15/concepts?size=1&conceptIds=${snomedCode}`
+    };
+
+    try {
+        const response = await axios.get(endpoints[language]);
+        console.log("this data is translated => " + this.extractTerm(response.data, language))
+        return this.extractTerm(response.data, language);
+    } catch (error) {
+        console.error(`Error fetching SNOMED code translation: ${error}`);
+        return null;
+    }
+  },
+
+    // The method that finds the display name based on language
+    findDisplayNameByLanguage(responseData, languageCode) {
       try {
-        // Fetch Allergies (Important Information) //TODO: maybe remove
-        this.fetchAllergyData();
+        // Extract the default English display value (from the 'display' parameter)
+        // if there are no translations in the wanted language - the english one is displayed
+        const defaultDisplay = responseData.parameter?.find(param => param.name === 'display')?.valueString;
+
+        if (!defaultDisplay) {
+          console.error('Default display name not found in the response data.');
+          return 'No display available';
+        }
+
+        // Look for the 'designation' array to find translations
+        const designationParts = responseData.parameter?.filter(param => param.name === 'designation');
+
+        // If no designation is found, return the default display value (English name)
+        if (!designationParts || designationParts.length === 0) {
+          console.warn('No designation translations found, returning default display value');
+          return defaultDisplay;
+        }
+
+        // Try to find the translation for the specified language
+        let translatedValue = defaultDisplay; // Start with default display value
+        for (let part of designationParts) {
+          const languagePart = part.part?.find(item => item.name === 'language' && item.valueCode === languageCode);
+
+          if (languagePart) {
+            // If the language is found, override the translated value
+            const valuePart = part.part?.find(item => item.name === 'value' && item.valueString);
+            if (valuePart) {
+              translatedValue = valuePart.valueString;
+              break; // Break the loop once translation is found
+            }
+          }
+        }
+        return translatedValue;
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error('Error in findDisplayNameByLanguage:', error);
+        return 'Error finding display name';
       }
     },
+
+    // The method that translates a LOINC code to a specific language
+    async translateLoincCode(loincCode, language) {
+      const system = 'http://loinc.org'; // Link needed
+      try {
+        const response = await axios.get('http://localhost:5000/proxy', {
+          params: { system, loincCode },
+        });
+        // Log the entire response data
+        //console.log("LOINC Code Response Data:", response.data);
+
+        if (response.data && response.data.parameter && Array.isArray(response.data.parameter)) {
+          const displayTerm = response.data.parameter.find(param => param.name === 'display');
+          if (displayTerm) {
+            //printing of the translated value
+            let resultingTerm = this.findDisplayNameByLanguage(response.data, language);
+            console.log("Translated term: " + resultingTerm);
+            return resultingTerm;
+          } else {
+            console.error("Display term not found in the response");
+            return null;
+          }
+        } else {
+          console.error("Unexpected response structure or empty 'parameter' array");
+          return null;
+        }
+      } catch (error) {
+        console.error(`Error fetching LOINC code translation: ${error}`);
+        return null;
+      }
+    },
+
+  // extract term from the response data
+  extractTerm(data, language) {
+    const descriptions = data.items[0].descriptions;
+    //find lang = language code in resonse code
+    return descriptions.find(desc => desc.lang === language).term;
+  },
 
     formatAddress(address) {
       // TODO: make it flexible if there is other data saved
@@ -627,8 +784,13 @@ export default {
       }
       return false;
     },
+},
 
-  }
+
+mounted() {
+  this.fetchPatientData();
+  this.renderChart();
+}
 };
 </script>
 

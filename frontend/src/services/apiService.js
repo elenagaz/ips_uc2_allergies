@@ -51,6 +51,48 @@ export const processComposition = async () => {
     }
 }
 
+// Fetch all observations for the patient
+export const getObservationsByEncounterIds = async (encounterIds) => {
+    try {
+        // Step 1: Fetch all observations for the patient
+        const response = await axios.get(`${apiUrl}/Observation?patient=${patientID}`);
+
+        // Step 2: Get the list of observations from the response
+        const observations = response.data.entry?.map(entry => entry.resource) || [];
+        console.log("check before")
+        console.log(observations)
+        // Step 3: Create an object to hold the grouped observations by encounter ID
+        const groupedObservations = {};
+
+        // Step 4: Group the observations by their encounter ID
+        observations.forEach(obs => {
+            // Get the encounter ID from the reference and remove the "Encounter/" prefix
+            const encounterReference = obs.encounter?.reference?.replace('Encounter/', '');
+
+            if (encounterReference && encounterIds.includes(encounterReference)) {
+                // If the encounterReference exists and matches one of the encounterIds, group the observation
+                if (!groupedObservations[encounterReference]) {
+                    groupedObservations[encounterReference] = [];
+                }
+
+                // Add the observation to the corresponding encounter group
+                groupedObservations[encounterReference].push(obs);
+            }
+        });
+
+        // Step 5: Return the grouped observations by encounter ID
+
+        console.log("check after")
+        console.log(groupedObservations)
+        return groupedObservations;
+    } catch (error) {
+        console.error('Error fetching observations:', error);
+        return {};
+    }
+}
+
+
+
 export const extractMedication = async (compositionData) => {
     try {
         const medicationSummary = compositionData["Medication Summary"];
@@ -132,5 +174,32 @@ export const fetchSocialHistoryEntries = async (compositionData) => {
     } catch (error) {
         console.error("Error extracting social history entries:", error.message);
         throw error;
+    }
+}
+
+export const getEncounters = async () => {
+    try {
+        // Fetch encounters from the API
+        const encountersResponse = await axios.get(`${apiUrl}Encounter?patient=${patientID}`);
+
+        // Get the data from the response
+        const encounters = encountersResponse.data.entry?.map(entry => entry.resource) || [];
+
+        // Create two arrays: one for encounterIds and one for encounterObjects
+        const encounterIds = encounters.map(encounter => encounter.id);
+        const encounterObjects = encounters;
+
+        // Return both arrays
+        return {
+            encounterIds,
+            encounterObjects
+        };
+    } catch (error) {
+        // Handle error in case of API failure or missing data
+        console.error('Error fetching encounters:', error);
+        return {
+            encounterIds: [],
+            encounterObjects: []
+        };
     }
 }

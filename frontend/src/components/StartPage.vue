@@ -195,71 +195,131 @@
     </div>-->
 
 
-    <!-- Card for Encounters with Sorted Table -->
-    <div class="card">
-      <h2 @click="toggleSection('encounters')" style="cursor: pointer;">
-        Encounters
-      </h2>
-      <div v-if="isEncountersVisible" class="card-content">
-        <table class="data-table">
-          <thead>
-          <tr>
-            <th>Date</th>
-            <th>Type</th>
-            <th>Status</th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr v-for="(encounter, index) in sortedEncounters" :key="index">
-            <td>{{ encounter.period?.start || 'N/A' }}</td>
-            <td>{{ encounter.id || 'N/A' }}</td>
-            <td>{{ encounter.status || 'N/A' }}</td>
-          </tr>
-          </tbody>
-        </table>
+      <div>
+        <!-- Card for Encounters with Sorted Table -->
+        <div class="card">
+          <h2 @click="toggleSection('encounters')" style="cursor: pointer;">
+            Encounters
+          </h2>
+          <div v-if="isEncountersVisible" class="card-content">
+            <table class="data-table">
+              <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Reason</th>
+                <th>Status</th>
+              </tr>
+              </thead>
+              <tbody>
+              <tr v-for="(encounter, index) in sortedEncounters" :key="index" @click="viewEncounterDetails(encounter)">
+                <td>{{ encounter.period?.start || 'unknown' }} - {{ encounter.period?.end || 'unknown' }}</td>
+                <td>{{ encounter.id?.split('-').pop() || 'N/A' }}</td>
+                <td>{{ encounter.reasonCode?.[0]?.coding?.[0]?.display || 'unknown' }}</td>
+                <td>{{ encounter.status || 'N/A' }}</td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Detailed Observations Card (Baby Blue Color) -->
+        <div v-if="selectedEncounter" class="detail-card" style="background-color: #cfe6e6; padding: 20px; margin-top: 20px; border-radius: 8px;">
+          <button @click="closeCard" style="background: none; border: none; color: #333; font-size: 20px; position: absolute; top: 10px; right: 10px; cursor: pointer;">
+            &times; <!-- This is the "X" character -->
+          </button>
+          <h3>Details for Encounter: {{ selectedEncounter.id || 'N/A' }}</h3>
+
+          <!-- Check if there are no observations for the selected encounter -->
+          <div v-if="!groupedObservations[selectedEncounter.id] || groupedObservations[selectedEncounter.id].length === 0">
+            <p>No observations are available for this encounter.</p>
+          </div>
+
+          <!-- If observations are available, display them -->
+          <div v-else>
+            <div v-for="(obs, index) in groupedObservations[selectedEncounter.id]" :key="index" class="observation-card">
+              <h4>{{ getObservationTitle(obs) }}</h4>
+
+              <!-- Notes Section -->
+              <div v-if="obs.note && obs.note.length > 0">
+                <h5>Notes:</h5>
+                <p>{{ obs.note[0]?.text || 'No notes available' }}</p>
+              </div>
+
+              <!-- Interpretation Section -->
+              <div v-if="obs.interpretation && obs.interpretation.length > 0">
+                <h5>Interpretation:</h5>
+                <p>{{ obs.interpretation[0]?.coding[0]?.display || 'No interpretation available' }}</p>
+              </div>
+
+              <!-- Components Section -->
+              <div v-if="obs.component && obs.component.length > 0">
+                <h5>Components:</h5>
+                <table class="data-table">
+                  <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Value</th>
+                    <th>Unit</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <tr v-for="(component, idx) in obs.component" :key="idx">
+                    <td>{{ component.code?.coding?.[0]?.display || 'N/A' }}</td>
+                    <td>{{ component.valueQuantity?.value || 'N/A' }}</td>
+                    <td>{{ component.valueQuantity?.code || 'N/A' }}</td>
+                  </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
-<!--    &lt;!&ndash; Card for Observations with Sorted Table &ndash;&gt;
-    <div class="card">
-      <h2 @click="toggleSection('observations')" style="cursor: pointer;">
-        Observations
-      </h2>
-      <div v-if="isObservationsVisible" class="card-content">
-        <table class="data-table">
-          <thead>
-          <tr>
-            <th>Type</th>
-            <th>Value</th>
-            <th>Date</th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr v-for="(observation, index) in sortedObservations" :key="index">
-            <td>{{ observation.id || 'N/A' }}</td>
-            <td>{{ observation.valueQuantity?.value || observation.note || observation.value ||'N/A' }} {{ observation.valueQuantity?.code || '' }}</td>
-            <td>{{ observation.effectiveDateTime || 'N/A' }}</td>
-          </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>-->
+        <!--    &lt;!&ndash; Card for Observations with Sorted Table &ndash;&gt;
+            <div class="card">
+              <h2 @click="toggleSection('observations')" style="cursor: pointer;">
+                Observations
+              </h2>
+              <div v-if="isObservationsVisible" class="card-content">
+                <table class="data-table">
+                  <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Value</th>
+                    <th>Date</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <tr v-for="(observation, index) in sortedObservations" :key="index">
+                    <td>{{ observation.id || 'N/A' }}</td>
+                    <td>{{ observation.valueQuantity?.value || observation.note || observation.value ||'N/A' }} {{ observation.valueQuantity?.code || '' }}</td>
+                    <td>{{ observation.effectiveDateTime || 'N/A' }}</td>
+                  </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>-->
 
   </div>
 
 
-  </div>
 </template>
 
 <script>
 import axios from 'axios';
 import Chart from 'chart.js/auto';
 import {
-  extractMedication,
   extractConditions,
+  extractMedication,
+  fetchSocialHistoryEntries,
+  getEncounters,
+  getObservationsByEncounterIds,
   getPatientData,
-  processComposition,
-  fetchSocialHistoryEntries
+  processComposition
 } from "@/services/apiService";
 
 
@@ -296,6 +356,16 @@ export default {
 
       chart: null,
 
+      selectedEncounter: null, // Store the selected encounter
+      observations: [], // List of observations for the selected encounter
+/*      sortedEncounters: [
+        { id: 'EC1', period: { start: '2023-08-12' }, status: 'Completed' },
+        { id: 'EC2', period: { start: '2023-08-13' }, status: 'Ongoing' },
+      ],*/
+      encounterIds: [],
+      groupedObservations: [],
+      selectedEncounterObservations: {} // Initially an empty object
+
     };
   },
 
@@ -306,20 +376,49 @@ export default {
         return new Date(b.period?.start || 0) - new Date(a.period?.start || 0);
       });
     },
-    sortedObservations() {
+    /*sortedObservations() {
       return this.observations.slice().sort((a, b) => {
         return new Date(b.effectiveDateTime || 0) - new Date(a.effectiveDateTime || 0);
       });
-    }
+    }*/
   },
 
   async created() {
-    this.patient = await getPatientData();
-    await this.fetchOtherData();
-    this.composition2 = await processComposition();
-    this.medications = await extractMedication(this.composition2)
-    this.conditions = await extractConditions(this.composition2);
-    this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
+    try {
+      this.patient = await getPatientData();
+      await this.fetchOtherData();
+      this.composition2 = await processComposition();
+      this.medications = await extractMedication(this.composition2);
+      this.conditions = await extractConditions(this.composition2);
+      this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
+
+      const encountersResponse = await getEncounters();
+      if (encountersResponse && encountersResponse.encounterIds && encountersResponse.encounterObjects) {
+        const { encounterIds, encounterObjects } = encountersResponse;
+        this.encounterIds = encounterIds;
+        this.encounters = encounterObjects;
+      } else {
+        console.error('Invalid response from getEncounters:', encountersResponse);
+        // Handle the error, maybe set to empty or default values
+        this.encounterIds = [];
+        this.encounters = [];
+      }
+// Assuming encounterIds are already available from your API or data
+      const encounterIds = this.sortedEncounters.map(encounter => encounter.id);
+
+      // Fetch observations and group them by encounter ID
+      this.groupedObservations = await getObservationsByEncounterIds(encounterIds);
+      console.log(this.groupedObservations); // Verify grouped observations
+
+
+      console.log("--- everything agin-----")
+      console.log(this.encounters);
+      console.log(this.groupedObservations);
+      console.log(this.selectedEncounter);
+
+    } catch (error) {
+      console.error('Error in created lifecycle hook:', error);
+    }
   },
 
   mounted() {
@@ -341,8 +440,8 @@ export default {
        /* const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
         this.patient = patientResponse.data;*/
 
-        const encountersResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Encounter?patient=UC2-Patient');
-        this.encounters = encountersResponse.data.entry?.map(entry => entry.resource) || [];
+        /*const encountersResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Encounter?patient=UC2-Patient');
+        this.encounters = encountersResponse.data.entry?.map(entry => entry.resource) || [];*/
 
         /*const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
         this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];*/
@@ -431,7 +530,7 @@ export default {
         if (addressString) addressString += ', ';
         addressString += address.line.join(', ');
       }
-      return addressString || 'N/A'; // Return 'N/A' if no address data is available
+      return addressString || 'N/A';
     },
 
     toggleSection(section) {
@@ -496,8 +595,139 @@ export default {
       });
     },
 
-  }
+    viewEncounterDetails(encounter) {
+      console.log("Selected encounter:", encounter);
 
+      const encounterId = encounter.id;
+      console.log("Checking Grouped Observations for encounter ID:", encounterId);
+
+      if (this.groupedObservations[encounterId]) {
+        console.log("Grouped Observations for this encounter:", this.groupedObservations[encounterId]);
+      } else {
+        console.warn("No grouped observations found for encounter ID:", encounterId);
+        console.log("Grouped Observations Object Keys:", Object.keys(this.groupedObservations));
+      }
+
+      this.selectedEncounter = encounter;
+    },
+    getObservationTitle(obs) {
+      // Customize this method to extract a suitable title for the observation
+      return obs.code?.coding?.[0]?.display || 'Unknown Observation';
+    },
+
+    async onEncounterRowClick(encounterId) {
+      console.log(`Selected encounter ID: ${encounterId}`);
+      try {
+        // Fetch observations for the selected encounter ID
+        const groupedObservations = await this.getObservationsByEncounterIds([encounterId]);
+
+        // Log the grouped observations to ensure they are correctly retrieved
+        console.log('Grouped Observations for this encounter:', groupedObservations);
+
+        // Set the selected encounter's observations
+        this.selectedEncounterObservations = groupedObservations[encounterId] || [];
+      } catch (error) {
+        console.error('Error fetching grouped observations:', error);
+      }
+    },
+
+// Close the card by setting selectedEncounter to null
+    closeCard() {
+      this.selectedEncounter = null;
+    },
+
+
+    /*    async viewEncounterDetails(encounter) {
+          this.selectedEncounter = encounter;
+
+          // Fetch the observations sorted by encounter ID
+          if (this.selectedEncounter && this.selectedEncounter.id) {
+            this.observations = await getObservationsByPatientId(this.patientId);
+
+            // Optionally, you could filter observations to show only those related to the selected encounter
+            this.observations = this.observations.filter(obs => {
+              return obs.encounter?.reference === `Encounter/${this.selectedEncounter.id}`;
+            });
+          }
+        },*/
+
+   /* async viewEncounterDetails(encounter) {
+      this.selectedEncounter = encounter;
+
+      // Simulate fetching matching observations (replace with real API call)
+      const observations = await this.fetchMatchingObservations(encounter.id);
+      this.observations = observations; // Set different observations for each encounter
+    },
+
+    getObservationTitle(obs) {
+      if (obs.category && obs.category.length > 0) {
+        const categoryDisplay = obs.category[0]?.coding?.[0]?.display || 'General Observations';
+        return `${categoryDisplay} Observation`;
+      }
+      return 'Unknown Observation';
+    },*/
+
+    /*async fetchMatchingObservations(encounterId) {
+      // Simulate different observations for each encounter
+      if (encounterId === 'EC1') {
+        return [
+          {
+            id: 'UC2-NutAllergenPanel1',
+            code: { coding: [{ display: 'Nut allergen panel - Serum' }] },
+            valueCodeableConcept: { coding: [{ display: 'Positive' }] },
+            interpretation: [{ coding: [{ display: 'High' }] }],
+            note: [{ text: 'Positive for cashew and almond allergies' }],
+            category: [{ coding: [{ display: 'Laboratory Tests' }] }],
+          },
+          {
+            id: 'UC2-VitalSigns1',
+            code: { coding: [{ display: 'Blood pressure test' }] },
+            valueQuantity: { value: 120, code: 'mm[Hg]' },
+            interpretation: [{ coding: [{ display: 'Normal' }] }],
+            category: [{ coding: [{ display: 'Vital Signs' }] }],
+            component: [
+              {
+                code: { coding: [{ display: 'Systolic blood pressure' }] },
+                valueQuantity: { value: 120, code: 'mm[Hg]' },
+              },
+              {
+                code: { coding: [{ display: 'Diastolic blood pressure' }] },
+                valueQuantity: { value: 80, code: 'mm[Hg]' },
+              },
+            ],
+          },
+        ];
+      } else if (encounterId === 'EC2') {
+        return [
+          {
+            id: 'UC2-AllergyPanel2',
+            code: { coding: [{ display: 'Skin prick test - Panel' }] },
+            valueCodeableConcept: { coding: [{ display: 'Negative' }] },
+            interpretation: [{ coding: [{ display: 'Normal' }] }],
+            note: [{ text: 'No significant allergens detected' }],
+            category: [{ coding: [{ display: 'Allergy Tests' }] }],
+          },
+          {
+            id: 'UC2-VitalSigns2',
+            code: { coding: [{ display: 'Heart rate test' }] },
+            valueQuantity: { value: 72, code: '/min' },
+            interpretation: [{ coding: [{ display: 'Normal' }] }],
+            category: [{ coding: [{ display: 'Vital Signs' }] }],
+            component: [
+              {
+                code: { coding: [{ display: 'Heart rate' }] },
+                valueQuantity: { value: 72, code: '/min' },
+              },
+            ],
+          },
+        ];
+      }
+
+      // Return an empty array by default
+      return [];
+    },*/
+
+  }
 
 };
 </script>
@@ -619,7 +849,7 @@ export default {
   flex: 1;
   margin: 10px;
   padding: 20px;
-  background-color: #f8f9fa;
+  background-color: #d3e8d3;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   text-align: center;
@@ -630,7 +860,7 @@ export default {
   margin: 10px;
   padding: 20px;
   background-color: #fff;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
   border-radius: 8px;
   display: flex;
   justify-content: center;
@@ -807,6 +1037,22 @@ canvas {
 
 .condition-table td a:hover {
   text-decoration: underline;
+}
+
+button {
+  background: none;
+  border: none;
+  color: #333;
+  font-size: 20px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  cursor: pointer;
+  z-index: 1000; /* Ensure it's on top */
+}
+
+button:hover {
+  color: #ff0000; /* Optional: change color on hover */
 }
 
 </style>

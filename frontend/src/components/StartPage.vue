@@ -94,7 +94,6 @@
                   <th>Status</th>
                   <th>Severity</th>
                   <th>Onset Date</th>
-                  <th>Condition Code</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -103,7 +102,6 @@
                   <td>{{ condition.clinicalStatus.coding[0].code || 'N/A'}}</td>
                   <td>{{ condition.severity.coding[0].display }}</td>
                   <td>{{ condition.onsetDateTime || 'N/A'}}</td>
-                  <td>{{ condition.code.coding[0].code || 'N/A'}}</td>
                 </tr>
                 </tbody>
               </table>
@@ -126,7 +124,6 @@
                   <th>Status</th>
                   <th>Date</th>
                   <th>Reason</th>
-                  <th>Code</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -135,7 +132,6 @@
                   <td>{{ medication.status || 'N/A'}}</td>
                   <td>{{ medication.effectiveDateTime || 'N/A'}}</td>
                   <td>{{ medication.reasonCode[0]?.coding[0]?.display || 'N/A' }}</td>
-                  <td>{{ medication.medicationCodeableConcept.coding[0].code || 'N/A'}}</td>
                 </tr>
                 </tbody>
               </table>
@@ -193,8 +189,6 @@
         </table>
       </div>
     </div>-->
-
-
       <div>
         <!-- Card for Encounters with Sorted Table -->
         <div class="card">
@@ -204,7 +198,7 @@
           <div v-if="isEncountersVisible" class="card-content">
             <table class="data-table">
               <thead>
-              <tr>
+              <tr style="background-color: lightgrey;">
                 <th>Date</th>
                 <th>Type</th>
                 <th>Reason</th>
@@ -223,59 +217,93 @@
           </div>
         </div>
 
-        <!-- Detailed Observations Card (Baby Blue Color) -->
-        <div v-if="selectedEncounter" class="detail-card" style="background-color: #cfe6e6; padding: 20px; margin-top: 20px; border-radius: 8px;">
-          <button @click="closeCard" style="background: none; border: none; color: #333; font-size: 20px; position: absolute; top: 10px; right: 10px; cursor: pointer;">
-            &times; <!-- This is the "X" character -->
+        <!-- Detailed Observations Card -->
+        <div
+            v-if="selectedEncounter"
+            class="detail-card"
+            style="background-color: #cfe6e6; padding: 20px; margin-top: 20px; border-radius: 8px; position: relative;">
+          <!-- Close Button (X) -->
+          <button
+              @click="selectedEncounter = null"
+              style="background: none; border: none; color: #333; font-size: 30px; position: absolute; top: 15px; right: 20px; cursor: pointer;">
+            &times; <!-- "X" -->
           </button>
-          <h3>Details for Encounter: {{ selectedEncounter.id || 'N/A' }}</h3>
+
+          <h3>Details for Encounter: {{ selectedEncounter.id?.split('-').pop() || 'N/A' }}</h3>
 
           <!-- Check if there are no observations for the selected encounter -->
-          <div v-if="!groupedObservations[selectedEncounter.id] || groupedObservations[selectedEncounter.id].length === 0">
+          <div v-if="!vitalSignObservations.length && !otherObservations.length">
             <p>No observations are available for this encounter.</p>
           </div>
 
-          <!-- If observations are available, display them -->
-          <div v-else>
-            <div v-for="(obs, index) in groupedObservations[selectedEncounter.id]" :key="index" class="observation-card">
-              <h4>{{ getObservationTitle(obs) }}</h4>
+          <!-- If vital signs observations are available -->
+          <div v-if="vitalSignObservations.length">
+            <h4>Vital Signs</h4>
 
-              <!-- Notes Section -->
+            <!-- Inline Details for Observation -->
+            <div v-for="(obs, obsIndex) in vitalSignObservations" :key="'obs-' + obsIndex" class="vital-sign-details">
+              <p>
+                <strong>Observation ID:</strong> {{ obs.id || 'N/A' }} |
+                <strong>Type:</strong> {{ obs.code?.coding?.[0]?.display || 'N/A' }} |
+                <strong>Date:</strong> {{ obs.effectiveDateTime || 'N/A' }}
+              </p>
               <div v-if="obs.note && obs.note.length > 0">
-                <h5>Notes:</h5>
-                <p>{{ obs.note[0]?.text || 'No notes available' }}</p>
-              </div>
-
-              <!-- Interpretation Section -->
-              <div v-if="obs.interpretation && obs.interpretation.length > 0">
-                <h5>Interpretation:</h5>
-                <p>{{ obs.interpretation[0]?.coding[0]?.display || 'No interpretation available' }}</p>
-              </div>
-
-              <!-- Components Section -->
-              <div v-if="obs.component && obs.component.length > 0">
-                <h5>Components:</h5>
-                <table class="data-table">
-                  <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Value</th>
-                    <th>Unit</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  <tr v-for="(component, idx) in obs.component" :key="idx">
-                    <td>{{ component.code?.coding?.[0]?.display || 'N/A' }}</td>
-                    <td>{{ component.valueQuantity?.value || 'N/A' }}</td>
-                    <td>{{ component.valueQuantity?.code || 'N/A' }}</td>
-                  </tr>
-                  </tbody>
-                </table>
+                <p><strong>Notes:</strong> {{ obs.note[0]?.text || 'No notes available' }}</p>
               </div>
             </div>
+
+            <!-- Vital Signs Table -->
+            <table class="data-table" style="width: 100%; border-collapse: collapse;">
+              <thead>
+              <tr style="background-color: lightgrey;">
+                <th>Observation Component</th>
+                <th>Value</th>
+                <th>Unit</th>
+              </tr>
+              </thead>
+              <tbody>
+              <!-- Loop through the components of each observation -->
+              <template v-for="(obs, obsIndex) in vitalSignObservations" :key="'obs-' + obsIndex">
+                <tr
+                    v-for="(component, componentIndex) in obs.component"
+                    :key="'component-' + componentIndex"
+                    style="background-color: white;">
+                  <td>{{ component.code?.coding?.[0]?.display || 'N/A' }}</td>
+                  <td>{{ component.valueQuantity?.value || 'N/A' }}</td>
+                  <td>{{ component.valueQuantity?.unit || 'N/A' }}</td>
+                </tr>
+              </template>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Other Observations (Tests) -->
+          <div v-if="otherObservations.length">
+            <h4>Other Observations (Tests)</h4>
+            <table class="data-table" style="width: 100%; border-collapse: collapse;">
+              <thead>
+              <tr style="background-color: lightgrey;">
+                <th>Date</th>
+                <th>Type</th>
+                <th>Interpretation</th>
+                <th>Notes</th>
+              </tr>
+              </thead>
+              <tbody>
+              <tr v-for="(obs, index) in otherObservations" :key="'test-' + index">
+                <td style="background-color: white;">{{ obs.effectiveDateTime || 'N/A' }}</td>
+                <td style="background-color: white;">{{ obs.code?.coding?.[0]?.display || 'N/A' }}</td>
+                <td style="background-color: white;">
+                  <!-- Add flag for "High" interpretation -->
+                  <span v-if="isHigh(obs)" style="color: red; font-weight: bold; font-size: 1em; margin-right: 5px;">⚠</span>
+                  {{ obs.interpretation?.[0]?.coding?.[0]?.display || 'No interpretation available' }}
+                </td>
+                <td style="background-color: white;">{{ obs.note?.[0]?.text || 'No notes available' }}</td>
+              </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -369,6 +397,19 @@ export default {
       return this.encounters.slice().sort((a, b) => {
         return new Date(b.period?.start || 0) - new Date(a.period?.start || 0);
       });
+    },
+
+    vitalSignObservations() {
+      if (!this.selectedEncounter || !this.groupedObservations[this.selectedEncounter.id]) {
+        return [];
+      }
+      return this.groupedObservations[this.selectedEncounter.id].filter(obs => obs.id.includes('VitalSign'));
+    },
+    otherObservations() {
+      if (!this.selectedEncounter || !this.groupedObservations[this.selectedEncounter.id]) {
+        return [];
+      }
+      return this.groupedObservations[this.selectedEncounter.id].filter(obs => !obs.id.includes('VitalSign'));
     },
   },
 
@@ -583,8 +624,36 @@ export default {
       this.selectedEncounter = null;
     },
 
+    testObservations() {
+      // Filter for observations that are not Vital Signs (i.e., the id does not contain "VitalSign")
+      return this.filteredObservations.filter(obs => !obs.id.includes('VitalSign'));
+    },
+    vitalSignsObservations() {
+      // Filter for observations that have "VitalSign" in the id
+      return this.filteredObservations.filter(obs => obs.id.includes('VitalSign'));
+    },
 
+    getRowStyle(component) {
+      // Check if the interpretation is 'high' for the component
+      if (component.interpretation && component.interpretation[0]?.coding[0]?.display.toLowerCase() === 'high') {
+        return { backgroundColor: 'red', color: 'white' }; // High interpretation - Red background
+      }
+      return {}; // Default (no highlight) for other interpretations
+    },
 
+    // For other observations (tests), highlight rows if interpretation is 'high'
+    getRowStyleForTests(obs) {
+      if (obs.interpretation && obs.interpretation[0]?.coding[0]?.display.toLowerCase() === 'high') {
+        return { backgroundColor: 'red', color: 'white' }; // High interpretation - Red background
+      }
+      return {}; // Default (no highlight) for other interpretations
+    },
+
+    isHigh(obs) {
+      return (
+          obs.interpretation?.[0]?.coding?.[0]?.display?.toLowerCase() === "high"
+      );
+    },
 
   }
 };
@@ -905,6 +974,17 @@ button {
 
 button:hover {
   color: #ff0000; /* Optional: change color on hover */
+}
+.data-table th, .data-table td {
+  padding: 8px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+.data-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+.data-table tr:hover {
+  background-color: #f1f1f1;
 }
 
 </style>

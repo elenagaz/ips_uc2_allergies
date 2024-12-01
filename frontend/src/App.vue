@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <StartPage msg="Patient data" />
+    <StartPage/>
   </div>
 </template>
 

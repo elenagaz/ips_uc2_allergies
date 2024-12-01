@@ -146,7 +146,8 @@
 
         <!-- Chart -->
         <div class="dashboard-chart">
-          <canvas id="foodAllergiesChart" width="400" height="400"></canvas>
+          <h3>Food Allergies Chart</h3> <!-- Title for the chart -->
+          <canvas id="foodAllergiesChart"></canvas>
         </div>
 
         <!-- Right Side-->
@@ -203,6 +204,9 @@
                 <th>Type</th>
                 <th>Reason</th>
                 <th>Status</th>
+                <th style="width: 50px;"> <!-- Flag Column with no styling here -->
+                  <span>Flag</span>
+                </th>
               </tr>
               </thead>
               <tbody>
@@ -211,9 +215,18 @@
                 <td>{{ encounter.id?.split('-').pop() || 'N/A' }}</td>
                 <td>{{ encounter.reasonCode?.[0]?.coding?.[0]?.display || 'unknown' }}</td>
                 <td>{{ encounter.status || 'N/A' }}</td>
+
+                <!-- Flag column with inline styles to make the box red -->
+                <td style="width: 50px; text-align: center;">
+                  <div v-if="hasHighInterpretation(encounter)"
+                       style="background-color: red; width: 30px; height: 30px; display: flex; justify-content: center; align-items: center; border-radius: 50%;">
+                    <span style="color: white; font-size: 18px;">⚠</span>
+                  </div>
+                </td>
               </tr>
               </tbody>
             </table>
+
           </div>
         </div>
 
@@ -270,7 +283,7 @@
                     style="background-color: white;">
                   <td>{{ component.code?.coding?.[0]?.display || 'N/A' }}</td>
                   <td>{{ component.valueQuantity?.value || 'N/A' }}</td>
-                  <td>{{ component.valueQuantity?.unit || 'N/A' }}</td>
+                  <td>{{ component.valueQuantity?.code || 'N/A' }}</td>
                 </tr>
               </template>
               </tbody>
@@ -286,6 +299,7 @@
                 <th>Date</th>
                 <th>Type</th>
                 <th>Interpretation</th>
+                <th>Value</th> <!-- Add new column for Value -->
                 <th>Notes</th>
               </tr>
               </thead>
@@ -297,6 +311,13 @@
                   <!-- Add flag for "High" interpretation -->
                   <span v-if="isHigh(obs)" style="color: red; font-weight: bold; font-size: 1em; margin-right: 5px;">⚠</span>
                   {{ obs.interpretation?.[0]?.coding?.[0]?.display || 'No interpretation available' }}
+                </td>
+                <!-- Display valueQuantity if available -->
+                <td style="background-color: white;">
+          <span v-if="obs.valueQuantity">
+            {{ obs.valueQuantity.value || 'N/A' }} {{ obs.valueQuantity.code || 'N/A' }}
+          </span>
+                  <span v-else>N/A</span>
                 </td>
                 <td style="background-color: white;">{{ obs.note?.[0]?.text || 'No notes available' }}</td>
               </tr>
@@ -334,6 +355,15 @@
 
   </div>
 
+  <div v-if="popOutVisible" class="pop-out-overlay" @click="closePopOut">
+    <div class="pop-out-content" @click.stop>
+      <h2>{{ selectedAllergy }} Information</h2>
+      <p>Value: {{ selectedValue }}%</p>
+      <!-- Add more details as needed -->
+      <button @click="closePopOut" class="close-button">Close</button>
+    </div>
+  </div>
+
 
 </template>
 
@@ -349,6 +379,9 @@ import {
   getPatientData,
   processComposition
 } from "@/services/apiService";
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+
+Chart.register(ChartDataLabels);
 
 
 export default {
@@ -373,12 +406,10 @@ export default {
       conditions: [],
 
 
-      allergies: [
-        { type: "Peanuts", value: 40 },
-        { type: "Shellfish", value: 30 },
-        { type: "Milk", value: 20 },
-        { type: "Eggs", value: 10 },
-      ],
+      allergies: [],
+      popOutVisible: false,
+      selectedAllergy: null,
+      selectedValue: null,
 
       chart: null,
 
@@ -411,10 +442,13 @@ export default {
       }
       return this.groupedObservations[this.selectedEncounter.id].filter(obs => !obs.id.includes('VitalSign'));
     },
+
   },
+
 
   async created() {
     try {
+      // Fetch patient and other data as you already do
       this.patient = await getPatientData();
       await this.fetchOtherData();
       this.composition2 = await processComposition();
@@ -422,6 +456,7 @@ export default {
       this.conditions = await extractConditions(this.composition2);
       this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
 
+      // Fetch encounters and observations
       const encountersResponse = await getEncounters();
       if (encountersResponse && encountersResponse.encounterIds && encountersResponse.encounterObjects) {
         const { encounterIds, encounterObjects } = encountersResponse;
@@ -432,14 +467,37 @@ export default {
         this.encounterIds = [];
         this.encounters = [];
       }
+
       const encounterIds = this.sortedEncounters.map(encounter => encounter.id);
 
       // Fetch observations and group them by encounter ID
       this.groupedObservations = await getObservationsByEncounterIds(encounterIds);
+
+      // Log groupedObservations to see its structure
+      console.log('groupedObservations:', this.groupedObservations);
+
+      // Check and process each encounter to add the high flag
+      this.encounters = this.encounters.map(encounter => {
+        // Check if any of the observations related to this encounter have a "high" interpretation
+        const hasHighInterpretation = Object.values(this.groupedObservations).some(observationsArray =>
+            observationsArray.some(obs =>
+                obs.encounter?.reference === `Encounter/${encounter.id}` &&
+                obs.interpretation?.[0]?.coding?.[0]?.display === 'High'
+            )
+        );
+        // Attach the flag to the encounter
+        return {
+          ...encounter,
+          hasHighInterpretation
+        };
+      });
+
+
     } catch (error) {
       console.error('Error in created lifecycle hook:', error);
     }
   },
+
 
   mounted() {
     this.renderChart();
@@ -548,6 +606,27 @@ export default {
 
       const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
 
+      // Expanded allergy dataset
+      this.allergies = [
+        { type: "Peanuts", value: 40 },
+        { type: "Shellfish", value: 25 },
+        { type: "Dairy", value: 15 },
+        { type: "Gluten", value: 20 },
+        { type: "Eggs", value: 10 },
+        { type: "Soy", value: 30 },
+        { type: "Wheat", value: 5 },
+        { type: "Fish", value: 12 },
+        { type: "Tree Nuts", value: 18 },
+        { type: "Sesame", value: 8 },
+        { type: "Corn", value: 22 },
+        { type: "Celery", value: 7 },
+        { type: "Mustard", value: 6 },
+        { type: "Lupin", value: 4 },
+        { type: "Sulphites", value: 11 },
+      ];
+
+      const disabledAllergies = ["Dairy", "Gluten", "Lupin", "Corn"]; // Gray-out these allergies
+
       this.chart = new Chart(ctx, {
         type: "doughnut",
         data: {
@@ -556,31 +635,79 @@ export default {
             {
               label: "Food Allergies",
               data: this.allergies.map((allergy) => allergy.value),
-              backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0"],
-              hoverOffset: 10, // Applies when hovering over a segment
-              offset: (context) => {
-                const allergyType = context.chart.data.labels[context.dataIndex];
-                const highlightedAllergies = ["Peanuts", "Shellfish"]; // List of allergies to highlight
-                return highlightedAllergies.includes(allergyType) ? 20 : 0;
-              },
-
+              backgroundColor: this.allergies.map((allergy) =>
+                  disabledAllergies.includes(allergy.type)
+                      ? "#C0C0C0" // Gray-out for disabled
+                      : [
+                        "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0",
+                        "#FF9F40", "#9966FF", "#FF5733", "#33FF57",
+                        "#3380FF", "#FFC300", "#C70039", "#900C3F",
+                        "#DAF7A6", "#581845", "#00BFFF",
+                      ][Math.floor(Math.random() * 15)] // Assign random colors to active segments
+              ),
+              hoverOffset: 10,
             },
           ],
         },
         options: {
+          onClick: (event, elements) => {
+            if (elements.length > 0) {
+              const chartElement = elements[0];
+              const index = chartElement.index;
+              const allergyType = this.chart.data.labels[index];
+
+              // Prevent pop-out for disabled allergies
+              if (disabledAllergies.includes(allergyType)) {
+                console.log(`${allergyType} is disabled.`);
+                return;
+              }
+
+              const allergyValue = this.chart.data.datasets[0].data[index];
+              this.openPopOut(allergyType, allergyValue);
+            }
+          },
           plugins: {
+            legend: {
+              display: false, // Hide the default legend
+            },
+            datalabels: {
+              color: "#000",
+              font: {
+                weight: "bold", // Make the text bold
+              },
+              formatter: (value, context) => {
+                const label = context.chart.data.labels[context.dataIndex];
+                return `${label}`;
+              },
+              anchor: "center", // Place the label inside the segment
+              align: "center",  // Align the text to the center of each segment
+              offset: 0,        // No offset, label will be centered
+            },
             tooltip: {
               callbacks: {
                 label: (tooltipItem) => {
                   const label = tooltipItem.label || "";
                   const value = tooltipItem.raw;
-                  return `${label}: ${value}% ${label === "Peanuts" ? "(High Risk)" : ""}`;
+                  return `${label}: ${value}%`;
                 },
               },
             },
           },
         },
       });
+    },
+
+
+
+    openPopOut(allergyType, allergyValue) {
+      this.selectedAllergy = allergyType;
+      this.selectedValue = allergyValue;
+      this.popOutVisible = true;
+    },
+    closePopOut() {
+      this.popOutVisible = false;
+      this.selectedAllergy = null;
+      this.selectedValue = null;
     },
 
     viewEncounterDetails(encounter) {
@@ -653,6 +780,17 @@ export default {
       return (
           obs.interpretation?.[0]?.coding?.[0]?.display?.toLowerCase() === "high"
       );
+    },
+
+    hasHighInterpretation(encounter) {
+      // Check if any observation for this encounter has a "High" interpretation
+      const observations = this.groupedObservations[encounter.id];
+      if (observations) {
+        return observations.some(obs =>
+            obs.interpretation?.[0]?.coding?.[0]?.display === 'High'
+        );
+      }
+      return false;
     },
 
   }
@@ -785,28 +923,32 @@ export default {
 .dashboard-chart {
   flex: 2;
   margin: 10px;
-  padding: 20px;
+  padding: 5px;
   background-color: #fff;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
   border-radius: 8px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: flex; /* Change to flex for centering */
+  flex-direction: column; /* Stack children (title and canvas) vertically */
+  justify-content: center; /* Vertically center the content */
+  align-items: center; /* Horizontally center the content */
   max-width: 600px; /* Limit the max width */
   width: 100%; /* Ensure the chart fits within the container */
+  position: relative;
+}
+
+.dashboard-chart h3 {
+  font-size: 1.5em;
+  margin-bottom: 15px; /* Space between the title and the chart */
+  color: #333; /* Adjust color as needed */
 }
 
 .dashboard-chart canvas {
-  width: 80% !important; /* Make the canvas width smaller */
-  height: 80% !important; /* Ensure height is proportionate */
+  width: 80% !important; /* Ensure the canvas takes up container width */
+  height: 80% !important; /* Fixed height for consistent layout */
+  margin-top: 5px; /* Optional: add space between the title and the graph */
 }
 
-canvas {
-  display: block;
-  margin: 0 auto;
-  width: auto; /* Make the canvas width responsive */
-  height: auto; /* Allow the height to adjust accordingly */
-}
+
 
 .dashboard-left,
 .dashboard-right {
@@ -986,5 +1128,47 @@ button:hover {
 .data-table tr:hover {
   background-color: #f1f1f1;
 }
+
+.pop-out-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7); /* Darker background */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it's in the foreground */
+}
+
+.pop-out-content {
+  background: white;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  width: 80%; /* Larger width */
+  max-width: 600px; /* Restrict to a maximum size */
+  text-align: center;
+  z-index: 1100; /* Ensure it appears above the overlay */
+  position: relative;
+}
+
+.close-button {
+  background-color: #ff4d4f;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 20px;
+}
+
+.close-button:hover {
+  background-color: #d9363e;
+}
+
+
 
 </style>

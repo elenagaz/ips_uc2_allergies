@@ -355,7 +355,8 @@ export default {
       selectedEncounter: null,
       observations: [],
       compositionSections: [],
-      isObservationsVisible: false,
+      //isObservationsVisible: false,
+      isEncountersVisible: true,
       allergyIntolerancesTranslated: [],
       extractedData: [],
       encounterIds: [],
@@ -389,7 +390,7 @@ export default {
   async created() {
     try {
       this.patient = await getPatientData();
-      await this.fetchOtherData();
+      await this.fetchPatientData();
       this.composition2 = await processComposition();
       this.medications = await extractMedication(this.composition2);
       this.conditions = await extractConditions(this.composition2);

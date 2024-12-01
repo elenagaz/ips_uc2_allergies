@@ -335,8 +335,6 @@ export default {
       isLocked: true,
       isImportantInfoVisible: true,
       isEncountersVisible: true,
-      //isObservationsVisible: false,
-
       composition: null,
       composition2: null,
 
@@ -356,15 +354,11 @@ export default {
 
       chart: null,
 
-      selectedEncounter: null, // Store the selected encounter
-      observations: [], // List of observations for the selected encounter
-/*      sortedEncounters: [
-        { id: 'EC1', period: { start: '2023-08-12' }, status: 'Completed' },
-        { id: 'EC2', period: { start: '2023-08-13' }, status: 'Ongoing' },
-      ],*/
+      selectedEncounter: null,
+      observations: [],
       encounterIds: [],
       groupedObservations: [],
-      selectedEncounterObservations: {} // Initially an empty object
+      selectedEncounterObservations: {}
 
     };
   },
@@ -376,11 +370,6 @@ export default {
         return new Date(b.period?.start || 0) - new Date(a.period?.start || 0);
       });
     },
-    /*sortedObservations() {
-      return this.observations.slice().sort((a, b) => {
-        return new Date(b.effectiveDateTime || 0) - new Date(a.effectiveDateTime || 0);
-      });
-    }*/
   },
 
   async created() {
@@ -399,23 +388,13 @@ export default {
         this.encounters = encounterObjects;
       } else {
         console.error('Invalid response from getEncounters:', encountersResponse);
-        // Handle the error, maybe set to empty or default values
         this.encounterIds = [];
         this.encounters = [];
       }
-// Assuming encounterIds are already available from your API or data
       const encounterIds = this.sortedEncounters.map(encounter => encounter.id);
 
       // Fetch observations and group them by encounter ID
       this.groupedObservations = await getObservationsByEncounterIds(encounterIds);
-      console.log(this.groupedObservations); // Verify grouped observations
-
-
-      console.log("--- everything agin-----")
-      console.log(this.encounters);
-      console.log(this.groupedObservations);
-      console.log(this.selectedEncounter);
-
     } catch (error) {
       console.error('Error in created lifecycle hook:', error);
     }
@@ -427,46 +406,14 @@ export default {
 
 
   methods: {
-/*    async fetchPatientData() {
-      try {
-        const response = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
-        this.patient = response.data;
-      } catch (error) {
-        console.error("Error fetching patient data:", error);
-      }
-    },*/
     async fetchOtherData() {
       try {
-       /* const patientResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Patient/UC2-Patient');
-        this.patient = patientResponse.data;*/
-
-        /*const encountersResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Encounter?patient=UC2-Patient');
-        this.encounters = encountersResponse.data.entry?.map(entry => entry.resource) || [];*/
-
-        /*const observationsResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Observation?patient=UC2-Patient');
-        this.observations = observationsResponse.data.entry?.map(entry => entry.resource) || [];*/
-
-        //await this.fetchCompositionData();
-        //this.fetchSocialHistoryEntries();
-
         // Fetch Allergies (Important Information) //TODO: maybe remove
         this.fetchAllergyData();
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     },
-
-
-/*    async fetchCompositionData() {
-      // Fetch the Composition resource
-      const patientComposition = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
-      this.composition = patientComposition.data;
-      console.log("getting data")
-      console.log(patientComposition.data.entry[0].resource.section[5].entry[0].reference)
-
-      // Log composition to check its structure
-      console.log("Fetched Composition:", this.composition);
-    },*/
 
     async fetchAllergyDetails(allergyReference) {
       try {
@@ -637,98 +584,9 @@ export default {
     },
 
 
-    /*    async viewEncounterDetails(encounter) {
-          this.selectedEncounter = encounter;
 
-          // Fetch the observations sorted by encounter ID
-          if (this.selectedEncounter && this.selectedEncounter.id) {
-            this.observations = await getObservationsByPatientId(this.patientId);
-
-            // Optionally, you could filter observations to show only those related to the selected encounter
-            this.observations = this.observations.filter(obs => {
-              return obs.encounter?.reference === `Encounter/${this.selectedEncounter.id}`;
-            });
-          }
-        },*/
-
-   /* async viewEncounterDetails(encounter) {
-      this.selectedEncounter = encounter;
-
-      // Simulate fetching matching observations (replace with real API call)
-      const observations = await this.fetchMatchingObservations(encounter.id);
-      this.observations = observations; // Set different observations for each encounter
-    },
-
-    getObservationTitle(obs) {
-      if (obs.category && obs.category.length > 0) {
-        const categoryDisplay = obs.category[0]?.coding?.[0]?.display || 'General Observations';
-        return `${categoryDisplay} Observation`;
-      }
-      return 'Unknown Observation';
-    },*/
-
-    /*async fetchMatchingObservations(encounterId) {
-      // Simulate different observations for each encounter
-      if (encounterId === 'EC1') {
-        return [
-          {
-            id: 'UC2-NutAllergenPanel1',
-            code: { coding: [{ display: 'Nut allergen panel - Serum' }] },
-            valueCodeableConcept: { coding: [{ display: 'Positive' }] },
-            interpretation: [{ coding: [{ display: 'High' }] }],
-            note: [{ text: 'Positive for cashew and almond allergies' }],
-            category: [{ coding: [{ display: 'Laboratory Tests' }] }],
-          },
-          {
-            id: 'UC2-VitalSigns1',
-            code: { coding: [{ display: 'Blood pressure test' }] },
-            valueQuantity: { value: 120, code: 'mm[Hg]' },
-            interpretation: [{ coding: [{ display: 'Normal' }] }],
-            category: [{ coding: [{ display: 'Vital Signs' }] }],
-            component: [
-              {
-                code: { coding: [{ display: 'Systolic blood pressure' }] },
-                valueQuantity: { value: 120, code: 'mm[Hg]' },
-              },
-              {
-                code: { coding: [{ display: 'Diastolic blood pressure' }] },
-                valueQuantity: { value: 80, code: 'mm[Hg]' },
-              },
-            ],
-          },
-        ];
-      } else if (encounterId === 'EC2') {
-        return [
-          {
-            id: 'UC2-AllergyPanel2',
-            code: { coding: [{ display: 'Skin prick test - Panel' }] },
-            valueCodeableConcept: { coding: [{ display: 'Negative' }] },
-            interpretation: [{ coding: [{ display: 'Normal' }] }],
-            note: [{ text: 'No significant allergens detected' }],
-            category: [{ coding: [{ display: 'Allergy Tests' }] }],
-          },
-          {
-            id: 'UC2-VitalSigns2',
-            code: { coding: [{ display: 'Heart rate test' }] },
-            valueQuantity: { value: 72, code: '/min' },
-            interpretation: [{ coding: [{ display: 'Normal' }] }],
-            category: [{ coding: [{ display: 'Vital Signs' }] }],
-            component: [
-              {
-                code: { coding: [{ display: 'Heart rate' }] },
-                valueQuantity: { value: 72, code: '/min' },
-              },
-            ],
-          },
-        ];
-      }
-
-      // Return an empty array by default
-      return [];
-    },*/
 
   }
-
 };
 </script>
 
@@ -1003,12 +861,6 @@ canvas {
 
 .medication-table td a:hover {
   text-decoration: underline;
-}
-
-.condition-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
 }
 
 .condition-table th, .condition-table td {

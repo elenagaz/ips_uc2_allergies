@@ -83,7 +83,7 @@
         <div class="dashboard-left">
           <!-- Card 1 on the Left -->
           <div class="dashboard-card">
-            <h3>Conditions</h3>
+            <h3 class="card-title">Conditions</h3>
             <!-- Check if allergy data exists -->
             <!-- Check if condition data exists -->
             <div v-if="conditions && conditions.length > 0">
@@ -114,7 +114,7 @@
 
           <!-- Card 2 on the Left -->
           <div class="dashboard-card">
-            <h3>Medication</h3>
+            <h3 class="card-title">Medication</h3>
             <div v-if="medications && medications.length > 0">
               <table class="medication-table">
                 <thead>
@@ -145,15 +145,20 @@
 
         <!-- Chart -->
         <div class="dashboard-chart">
-          <h3>Food Allergies Chart</h3>
+          <h3>Food Allergies</h3>
           <canvas id="foodAllergiesChart"></canvas>
         </div>
 
         <!-- Right Side-->
         <div class="dashboard-right">
           <div class="dashboard-card">
-            <h3>All allergies </h3>
-            <p>There are other allergies or intolerances available through the SNOMED CT browser, because of the food inflorescence use-case only food in the graph</p>
+            <h3 class="card-title">All allergies</h3>
+
+            <ul class="allergy-list">
+              <li v-for="(allergy, index) in allergyGroups" :key="index">
+                {{ allergy.name }}
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -346,6 +351,13 @@ export default {
 
 
       allergies: [],
+      disabledAllergies: [],
+      allergyGroups: [],
+      allergies2: [], // To store the fetched allergy data
+      error: null,   // To store any error messages
+      loading: false, // To indicate loading state
+      highlightedCodes: [],
+
       popOutVisible: false,
       selectedAllergy: null,
       selectedValue: null,
@@ -392,10 +404,13 @@ export default {
     try {
       this.patient = await getPatientData();
       await this.fetchPatientData();
+
       this.composition2 = await processComposition();
       this.medications = await extractMedication(this.composition2);
       this.conditions = await extractConditions(this.composition2);
       this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
+
+      //this.allergyGroups = await getAllergyGroups();
 
       const encountersResponse = await getEncounters();
       if (encountersResponse && encountersResponse.encounterIds && encountersResponse.encounterObjects) {
@@ -450,6 +465,72 @@ export default {
       console.error("Error fetching data:", error);
     }
   },
+
+    async fetchFoodAllergies() {
+      const SNOMED_API_BASE = 'https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/concepts';
+      const relevantConceptIds = ["414285001", "235719002"];
+
+      const fetchChildren = async (conceptId) => {
+        try {
+          const response = await axios.get(`${SNOMED_API_BASE}/${conceptId}/children`);
+          return response.data;
+        } catch (error) {
+          console.error(`Error fetching children for concept ${conceptId}:`, error);
+          throw error;
+        }
+      };
+
+      const fetchConcept = async (conceptId) => {
+        try {
+          const response = await axios.get(`${SNOMED_API_BASE}/${conceptId}`);
+          return response.data;
+        } catch (error) {
+          console.error(`Error fetching concept ${conceptId}:`, error);
+          throw error;
+        }
+      };
+
+      const fetchAllSubgroups = async (conceptId) => {
+        const children = await fetchChildren(conceptId);
+        if (!children || children.length === 0) return [];
+        const result = await Promise.all(
+            children.map(async (child) => {
+              const childChildren = await fetchAllSubgroups(child.conceptId);
+              return {
+                name: child.pt.term,
+                conceptId: child.conceptId,
+                children: childChildren,
+              };
+            })
+        );
+        return result;
+      };
+
+      try {
+        const allergies = await Promise.all(
+            relevantConceptIds.map(async (conceptId) => {
+              const concept = await fetchConcept(conceptId);
+              const subgroups = await fetchAllSubgroups(conceptId);
+              return {
+                name: concept.pt.term,
+                type: concept.pt.term, // You can adjust `type` to match your structure
+                value: Math.floor(Math.random() * 100), // Mock value for testing
+                conceptId,
+                subgroups,
+              };
+            })
+        );
+
+        this.allergies = allergies;
+        console.log('Food allergies fetched successfully:', allergies);
+
+        // Call renderChart after fetching data
+        this.renderChart();
+      } catch (error) {
+        console.error('Error fetching food allergies:', error);
+        this.error = 'Failed to fetch food allergies. Please try again later.';
+      }
+    },
 
   // fetch allergy intolerances from the allergy reference in the composition resource
   async fetchAllergyIntolerances() {
@@ -599,7 +680,7 @@ export default {
   // extract term from the response data
   extractTerm(data, language) {
     const descriptions = data.items[0].descriptions;
-    //find lang = language code in resonse code
+    //find lang = language code in response code
     return descriptions.find(desc => desc.lang === language).term;
   },
 
@@ -652,93 +733,152 @@ export default {
 
       const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
 
-      // Expanded allergy dataset
-      this.allergies = [
-        { type: "Peanuts", value: 40 },
-        { type: "Shellfish", value: 25 },
-        { type: "Dairy", value: 15 },
-        { type: "Gluten", value: 20 },
-        { type: "Eggs", value: 10 },
-        { type: "Soy", value: 30 },
-        { type: "Wheat", value: 5 },
-        { type: "Fish", value: 12 },
-        { type: "Tree Nuts", value: 18 },
-        { type: "Sesame", value: 8 },
-        { type: "Corn", value: 22 },
-        { type: "Celery", value: 7 },
-        { type: "Mustard", value: 6 },
-        { type: "Lupin", value: 4 },
-        { type: "Sulphites", value: 11 },
-      ];
+      // Extract and process second-level allergies
+      const secondLevelAllergies = this.allergies.flatMap((allergy) =>
+          allergy.subgroups.map((subgroup) => ({
+            name: subgroup.name.replace(/^(Allergy to|Intolerance to)\s+/i, ""), // Cleaned-up name
+            fullName: subgroup.name, // Full name for tooltip
+            conceptId: subgroup.conceptId, // Code for matching
+            type: allergy.name.toLowerCase().includes("intolerance") ? "intolerance" : "allergy", // Classify by parent type
+          }))
+      );
 
-      const disabledAllergies = ["Dairy", "Gluten", "Lupin", "Corn"]; // Gray-out these allergies
+      this.highlightedCodes = this.findSubclassByCode(
+          this.extractedData.allergySnomedCode,
+          this.extractedData.criticality
+      );
+
+      // Assign equal value to each second-level allergy
+      const equalValue = 100 / secondLevelAllergies.length; // Each gets an equal space
 
       this.chart = new Chart(ctx, {
         type: "doughnut",
         data: {
-          labels: this.allergies.map((allergy) => allergy.type),
+          labels: secondLevelAllergies.map((subgroup) => subgroup.name), // Cleaned-up names
           datasets: [
             {
-              label: "Food Allergies",
-              data: this.allergies.map((allergy) => allergy.value),
-              backgroundColor: this.allergies.map((allergy) =>
-                  disabledAllergies.includes(allergy.type)
-                      ? "#C0C0C0" // Gray-out for disabled
-                      : [
-                        "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0",
-                        "#FF9F40", "#9966FF", "#FF5733",
-                      ][Math.floor(Math.random() * 7)] // Assign random colors to active segments
-              ),
+              label: "Food Allergies and Intolerances",
+              data: secondLevelAllergies.map(() => equalValue), // Equal value for all
+              backgroundColor: secondLevelAllergies.map((subgroup) => {
+                if (this.highlightedCodes.includes(subgroup.conceptId)) {
+                  return "#FF0000"; // Highlight red for matching codes
+                }
+                return subgroup.type === "intolerance" ? "#A9A9A9" : "#D3D3D3"; // Dark gray for intolerance, Light gray for allergy
+              }),
               hoverOffset: 10,
             },
           ],
         },
         options: {
-          onClick: (event, elements) => {
-            if (elements.length > 0) {
-              const chartElement = elements[0];
-              const index = chartElement.index;
-              const allergyType = this.chart.data.labels[index];
-
-              // Prevent pop-out for disabled allergies
-              if (disabledAllergies.includes(allergyType)) {
-                console.log(`${allergyType} is disabled.`);
-                return;
-              }
-
-              const allergyValue = this.chart.data.datasets[0].data[index];
-              this.openPopOut(allergyType, allergyValue);
-            }
-          },
           plugins: {
             legend: {
-              display: false, // Hide the default legend
+              display: true,
+              position: "bottom",
+              labels: {
+                usePointStyle: true,
+                boxWidth: 15,
+                font: {
+                  size: 12,
+                },
+                generateLabels: () => {
+                  return [
+                    { text: "High Risk", fillStyle: "#FF0000" },
+                    { text: "Intolerance", fillStyle: "#A9A9A9" },
+                    { text: "Allergy", fillStyle: "#D3D3D3" },
+                  ];
+                },
+              },
+            },
+            tooltip: {
+              callbacks: {
+                label: (tooltipItem) => {
+                  const index = tooltipItem.dataIndex;
+                  return secondLevelAllergies[index].fullName; // Full name without percentage
+                },
+              },
             },
             datalabels: {
               color: "#000",
               font: {
-                weight: "bold", // Make the text bold
+                weight: "bold",
               },
               formatter: (value, context) => {
                 const label = context.chart.data.labels[context.dataIndex];
                 return `${label}`;
               },
-              anchor: "center", // Place the label inside the segment
-              align: "center",  // Align the text to the center of each segment
-              offset: 0,        // No offset, label will be centered
+              anchor: "center",
+              align: "center",
+              offset: 0,
             },
-            tooltip: {
-              callbacks: {
-                label: (tooltipItem) => {
-                  const label = tooltipItem.label || "";
-                  const value = tooltipItem.raw;
-                  return `${label}: ${value}%`;
-                },
-              },
-            },
+          },
+          onClick: (event, elements) => {
+            if (elements?.length > 0) {
+              const chartElement = elements[0];
+              const index = chartElement.index;
+
+              // Check if the clicked section is highlighted
+              const conceptId = secondLevelAllergies[index]?.conceptId;
+              if (conceptId && this.highlightedCodes.includes(conceptId)) {
+                // Open pop-out window with allergy information
+                const allergyType = secondLevelAllergies[index]?.fullName || "Unknown Allergy";
+                const allergyValue = equalValue.toFixed(2); // Pass the value as a percentage
+                this.openPopOut(allergyType, allergyValue);
+              }
+            }
           },
         },
       });
+    },
+
+    findSubclassByCode(code, criticality) {
+      if (!this.allergies || this.allergies.length === 0) {
+        console.error("Allergies data is missing or empty.");
+        return [];
+      }
+
+      console.log("Searching for code:", code, "with criticality:", criticality);
+      console.log("Allergies data:", this.allergies);
+
+      // Array to collect matching second-level conceptIds
+      const matchingSecondLevelCodes = [];
+
+      // Function to search recursively in deeper levels
+      const searchHierarchy = (group, parentSubgroup) => {
+        // Check if the current group matches the code
+        if (group.conceptId === code) {
+          console.log("Match found:", group.name);
+
+          // If the parent subgroup exists, return its conceptId
+          if (parentSubgroup) {
+            if (!matchingSecondLevelCodes.includes(parentSubgroup.conceptId)) {
+              matchingSecondLevelCodes.push(parentSubgroup.conceptId);
+            }
+          }
+        }
+
+        // Recursively search children (if any exist)
+        if (group.children && group.children.length > 0) {
+          for (const child of group.children) {
+            searchHierarchy(child, parentSubgroup);
+          }
+        }
+      };
+
+      // Loop through top-level allergies
+      for (const allergy of this.allergies) {
+        if (Array.isArray(allergy.subgroups)) {
+          // Iterate through second-level subgroups
+          for (const subgroup of allergy.subgroups) {
+            // Search within each second-level subgroup's hierarchy
+            searchHierarchy(subgroup, subgroup);
+          }
+        }
+      }
+
+      console.log("Matching second-level conceptIds:", matchingSecondLevelCodes);
+
+      // Ensure the return value is always an array
+      return matchingSecondLevelCodes.length > 0 ? matchingSecondLevelCodes : [];
     },
 
     openPopOut(allergyType, allergyValue) {
@@ -788,8 +928,10 @@ export default {
 
 
 mounted() {
+  this.fetchFoodAllergies(); // Automatically fetch data when the component is mounted
   this.fetchPatientData();
   this.renderChart();
+
 }
 };
 </script>
@@ -1162,4 +1304,28 @@ button:hover {
 .close-button:hover {
   background-color: #d9363e;
 }
+
+.dashboard-card {
+  text-align: left; /* Default text alignment for card content */
+  padding: 1rem;    /* Add padding for better layout */
+}
+
+.card-title {
+  text-align: center; /* Center-align the title */
+  margin-bottom: 1rem; /* Add spacing below the title */
+  font-size: 1.5rem; /* Adjust font size for prominence */
+}
+
+.allergy-list {
+  list-style: none; /* Remove bullet points */
+  padding: 0;       /* Remove default padding */
+  margin: 0;        /* Remove default margin */
+}
+
+.allergy-list li {
+  padding: 0.5rem 0; /* Add space between list items */
+  font-size: 1rem;   /* Adjust font size for readability */
+}
+
+
 </style>

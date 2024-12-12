@@ -1,0 +1,286 @@
+{
+  "conceptId": "414285001",
+  "name": "Allergy to food",
+  "type": "Allergy",
+  "value": 100,
+  "subgroups": [
+    {
+      "conceptId": "91937001",
+      "name": "Allergy to seafood",
+      "type": "Allergy",
+      "value": 70,
+      "subgroups": []
+    },
+    {
+      "conceptId": "91934008",
+      "name": "Allergy to nut",
+      "type": "Allergy",
+      "value": 60,
+      "subgroups": [
+        {
+          "conceptId": "48821000119104",
+          "name": "Allergy to tree nut",
+          "type": "Allergy",
+          "value": 50,
+          "subgroups": [
+            {
+              "conceptId": "712844008",
+              "name": "Allergy to macadamia nut",
+              "type": "Allergy",
+              "value": 45,
+              "subgroups": []
+            },
+            {
+              "conceptId": "712840004",
+              "name": "Allergy to hazelnut",
+              "type": "Allergy",
+              "value": 40,
+              "subgroups": []
+            },
+            {
+              "conceptId": "712839001",
+              "name": "Allergy to almond",
+              "type": "Allergy",
+              "value": 38,
+              "subgroups": []
+            },
+            {
+              "conceptId": "712838009",
+              "name": "Allergy to cashew nut",
+              "type": "Allergy",
+              "value": 35,
+              "subgroups": []
+            },
+            {
+              "conceptId": "91940001",
+              "name": "Allergy to walnut",
+              "type": "Allergy",
+              "value": 30,
+              "subgroups": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "conceptId": "91932007",
+      "name": "Allergy to fruit",
+      "type": "Allergy",
+      "value": 50,
+      "subgroups": [
+        {
+          "conceptId": "23181000122104",
+          "name": "Allergy to mango fruit",
+          "type": "Allergy",
+          "value": 45,
+          "subgroups": []
+        },
+        {
+          "conceptId": "23171000122102",
+          "name": "Allergy to kiwi fruit",
+          "type": "Allergy",
+          "value": 40,
+          "subgroups": []
+        },
+        {
+          "conceptId": "13511000122108",
+          "name": "Allergy to pineapple",
+          "type": "Allergy",
+          "value": 38,
+          "subgroups": []
+        },
+        {
+          "conceptId": "860604008",
+          "name": "Allergy to apple",
+          "type": "Allergy",
+          "value": 35,
+          "subgroups": []
+        },
+        {
+          "conceptId": "714332003",
+          "name": "Allergy to banana",
+          "type": "Allergy",
+          "value": 33,
+          "subgroups": []
+        },
+        {
+          "conceptId": "419298007",
+          "name": "Allergy to watermelon",
+          "type": "Allergy",
+          "value": 30,
+          "subgroups": []
+        },
+        {
+          "conceptId": "418085001",
+          "name": "Allergy to citrus fruit",
+          "type": "Allergy",
+          "value": 28,
+          "subgroups": []
+        },
+        {
+          "conceptId": "418051002",
+          "name": "Allergy to cherry",
+          "type": "Allergy",
+          "value": 25,
+          "subgroups": []
+        },
+        {
+          "conceptId": "91938006",
+          "name": "Allergy to strawberry",
+          "type": "Allergy",
+          "value": 20,
+          "subgroups": []
+        }
+      ]
+    },
+    {
+      "conceptId": "16067171000119102",
+      "name": "Allergy to food additive (finding)",
+      "type": "Allergy",
+      "value": 50,
+      "subgroups": [
+        {
+          "conceptId": "294847001",
+          "name": "Allergy to gelatin",
+          "type": "Allergy",
+          "value": 45,
+          "subgroups": []
+        }
+      ]
+    },
+    {
+      "conceptId": "235719002",
+      "name": "Intolerance to food (finding)",
+      "type": "Intolerance",
+      "value": 50,
+      "subgroups": [
+        {
+          "conceptId": "81781000119107",
+          "name": "Intolerance to infant formula",
+          "type": "Intolerance",
+          "value": 45,
+          "subgroups": []
+        },
+        {
+          "conceptId": "1269424006",
+          "name": "Gluten intolerance",
+          "type": "Intolerance",
+          "value": 40,
+          "subgroups": []
+        },
+        {
+          "conceptId": "782415009",
+          "name": "Intolerance to lactose",
+          "type": "Intolerance",
+          "value": 38,
+          "subgroups": []
+        },
+        {
+          "conceptId": "782338006",
+          "name": "Intolerance to monosodium glutamate",
+          "type": "Intolerance",
+          "value": 35,
+          "subgroups": []
+        },
+        {
+          "conceptId": "700095006",
+          "name": "Intolerance to wheat",
+          "type": "Intolerance",
+          "value": 30,
+          "subgroups": []
+        },
+        {
+          "conceptId": "700094005",
+          "name": "Intolerance to milk",
+          "type": "Intolerance",
+          "value": 28,
+          "subgroups": []
+        }
+      ]
+    },
+    {
+      "conceptId": "21191000122102",
+      "name": "Allergy to mustard seasoning",
+      "type": "Allergy",
+      "value": 45,
+      "subgroups": []
+    },
+    {
+      "conceptId": "1269425007",
+      "name": "Allergy to gluten",
+      "type": "Allergy",
+      "value": 40,
+      "subgroups": []
+    },
+    {
+      "conceptId": "420174000",
+      "name": "Allergy to wheat",
+      "type": "Allergy",
+      "value": 38,
+      "subgroups": []
+    },
+    {
+      "conceptId": "782555009",
+      "name": "Allergy to cow's milk protein",
+      "type": "Allergy",
+      "value": 35,
+      "subgroups": []
+    },
+    {
+      "conceptId": "213020009",
+      "name": "Allergy to egg protein",
+      "type": "Allergy",
+      "value": 33,
+      "subgroups": []
+    },
+    {
+      "conceptId": "418184004",
+      "name": "Allergy to rye",
+      "type": "Allergy",
+      "value": 30,
+      "subgroups": []
+    },
+    {
+      "conceptId": "712841000",
+      "name": "Allergy to barley",
+      "type": "Allergy",
+      "value": 28,
+      "subgroups": []
+    },
+    {
+      "conceptId": "294741005",
+      "name": "Allergy to guar gum",
+      "type": "Allergy",
+      "value": 25,
+      "subgroups": []
+    },
+    {
+      "conceptId": "294316000",
+      "name": "Allergy to olive oil",
+      "type": "Allergy",
+      "value": 20,
+      "subgroups": []
+    },
+    {
+      "conceptId": "294317009",
+      "name": "Allergy to Arachis oil",
+      "type": "Allergy",
+      "value": 18,
+      "subgroups": []
+    },
+    {
+      "conceptId": "300914000",
+      "name": "Allergy to cheese",
+      "type": "Allergy",
+      "value": 15,
+      "subgroups": []
+    },
+    {
+      "conceptId": "300912001",
+      "name": "Allergy to chocolate",
+      "type": "Allergy",
+      "value": 12,
+      "subgroups": []
+    }
+  ]
+}

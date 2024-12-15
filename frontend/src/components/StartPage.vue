@@ -65,8 +65,10 @@
               <label>Additional Information:</label>
               <!-- Displaying the code and the note if it exists -->
               <span>
-                {{ entry.code?.coding?.[0]?.display || 'N/A' }}
-                <span v-if="entry.note?.[0]?.text">, {{ entry.note[0].text }}</span>
+                {{ entry.code?.coding?.[0]?.display||'N/A'}}<span v-if="entry.note?.[0]?.text">, {{ cleanText(entry.valueCodeableConcept.coding[0].display) }}</span>
+                <span v-if="getReason(entry.encounter?.reference)">
+                  <span class="reason-label"> Reason:</span> {{ getReason(entry.encounter?.reference) }}
+                </span>
               </span>
             </div>
           </div>
@@ -98,7 +100,7 @@
                 <tr v-for="condition in conditions" :key="condition.id">
                   <td>{{ condition.code.coding[0].display || 'N/A'}}</td> <!--can be translated-->
                   <td>{{ condition.clinicalStatus.coding[0].code || 'N/A'}}</td>
-                  <td>{{ condition.severity.coding[0].display }}</td>
+                  <td>{{ cleanText(condition.severity.coding[0].display) }}</td>
                   <td>{{ condition.onsetDateTime || 'N/A'}}</td>
                 </tr>
                 </tbody>
@@ -128,7 +130,7 @@
                   <td>{{ medication.medicationCodeableConcept.coding[0].display || 'N/A'}}</td> <!--can be translated-->
                   <td>{{ medication.status || 'N/A'}}</td>
                   <td>{{ medication.effectiveDateTime || 'N/A'}}</td>
-                  <td>{{ medication.reasonCode[0]?.coding[0]?.display || 'N/A' }}</td>
+                  <td>{{ cleanText(medication.reasonCode[0]?.coding[0]?.display) || 'N/A' }}</td>
                 </tr>
                 </tbody>
               </table>
@@ -356,18 +358,11 @@ import {
   processComposition
 } from "@/services/apiService";
 import ChartDataLabels from 'chartjs-plugin-datalabels';
-import { createI18n } from 'vue-i18n';
 
 Chart.register(ChartDataLabels);
 
-const i18n = createI18n({
-  locale: localStorage.getItem('language') || 'en',
-  //can add more here
-});
-
 
 export default {
-  i18n,
   data() {
     return {
       patient: null,
@@ -450,6 +445,8 @@ export default {
       this.medications = await extractMedication(this.composition2);
       this.conditions = await extractConditions(this.composition2);
       this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
+      console.log("HEREEEEEEEEEE")
+      console.log(this.socialHistoryEntries)
 
       const encountersResponse = await getEncounters();
       if (encountersResponse && encountersResponse.encounterIds && encountersResponse.encounterObjects) {
@@ -508,6 +505,34 @@ export default {
       console.error("Error fetching data:", error);
     }
   },
+    cleanText(text) {
+      if (text) {
+        return text.replace(/\s?\(.*\)/, '').trim();
+      }
+      return ''; // Return empty if no text is found
+    },
+    getReason(encounterReference) {
+      if (!encounterReference) return null; // If no encounterReference, return null
+
+      const encounterId = encounterReference.split('/').pop(); // Extract the actual encounter reference (e.g., "BreathingIssues")
+
+      // Find the encounter by the reference (you can implement this based on your data structure)
+      const encounter = this.getEncounterById(encounterId);
+
+      if (encounter && encounter.reasonCode?.length > 0) {
+        // If reasonCode is found, return the display value
+        return encounter.reasonCode[0]?.coding?.[0]?.display || 'unknown';
+      }
+
+      return 'unknown'; // Default to 'unknown' if no reasonCode is found
+    },
+    getEncounterById(encounterId) {
+      // This function will return the encounter object based on the encounter ID
+      // You need to implement this based on how your encounters are stored in the app
+
+      // For example, if you have a list of encounters, you can filter by encounter ID
+      return this.sortedEncounters.find(encounter => encounter.id === encounterId);
+    },
 
 /*    async fetchAllergyGroups() {
       try {
@@ -1251,9 +1276,9 @@ export default {
               data: secondLevelAllergies.map(() => equalValue), // Equal value for all
               backgroundColor: secondLevelAllergies.map((subgroup) => {
                 if (this.highlightedCodes.includes(subgroup.conceptId)) {
-                  return "#FF0000"; // Highlight red for matching codes
+                  return "#F95A49"; // Highlight red for matching codes
                 }
-                return subgroup.type === "intolerance" ? "#A9A9A9" : "#D3D3D3"; // Dark gray for intolerance, Light gray for allergy
+                return subgroup.type === "intolerance" ? "#8C8C8C" : "#D3D3D3"; // Dark gray for intolerance, Light gray for allergy
               }),
               hoverOffset: 10,
             },
@@ -1263,7 +1288,7 @@ export default {
           plugins: {
             legend: {
               display: true,
-              position: "bottom",
+              position: "top",
               labels: {
                 usePointStyle: true,
                 boxWidth: 15,
@@ -1272,8 +1297,8 @@ export default {
                 },
                 generateLabels: () => {
                   return [
-                    { text: "High Risk", fillStyle: "#FF0000" },
-                    { text: "Intolerance", fillStyle: "#A9A9A9" },
+                    { text: "High Risk", fillStyle: "#F95A49" },
+                    { text: "Intolerance", fillStyle: "#8C8C8C" },
                     { text: "Allergy", fillStyle: "#D3D3D3" },
                   ];
                 },
@@ -1819,6 +1844,8 @@ button:hover {
   padding: 0.5rem 0; /* Add space between list items */
   font-size: 1rem;   /* Adjust font size for readability */
 }
-
+.reason-label {
+  font-weight: 600; /* Makes the word 'Reason' bold */
+}
 
 </style>

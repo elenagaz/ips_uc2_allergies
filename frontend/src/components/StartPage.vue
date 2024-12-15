@@ -28,51 +28,53 @@
           Patient Information
         </h2>
         <transition name="expand-fade">
-        <div v-if="isPatientVisible" class="card-content">
-          <!-- First Row -->
-          <div class="info-row">
-            <div class="info-label">
-              <label>Name:</label>
-              <span>{{ patient?.name?.[0]?.given?.join(' ') || 'N/A' }}</span>
+          <div v-if="isPatientVisible" class="card-content">
+            <!-- First Row -->
+            <div class="info-row">
+              <div class="info-label">
+                <label>Name:</label>
+                <span>{{ patient?.name?.[0]?.given?.join(' ') || 'N/A' }}</span>
+              </div>
+              <div class="info-label">
+                <label>Last Name:</label>
+                <span>{{ patient?.name?.[0]?.family || 'N/A' }}</span>
+              </div>
+              <div class="info-label">
+                <label>ID:</label>
+                <span>{{ patient?.id || 'N/A' }}</span>
+              </div>
             </div>
-            <div class="info-label">
-              <label>Last Name:</label>
-              <span>{{ patient?.name?.[0]?.family || 'N/A' }}</span>
+            <!-- Second Row -->
+            <div class="info-row">
+              <div class="info-label">
+                <label>Gender:</label>
+                <span>{{ patient?.gender || 'N/A' }}</span>
+              </div>
+              <div class="info-label">
+                <label>Birth Date:</label>
+                <span>{{ patient?.birthDate || 'N/A' }}</span>
+              </div>
+              <div v-if="patient?.address && patient.address.length > 0" class="info-label">
+                <label>Address:</label>
+                <span>{{ formatAddress(patient.address[0]) || 'N/A' }}</span>
+              </div>
             </div>
-            <div class="info-label">
-              <label>ID:</label>
-              <span>{{ patient?.id || 'N/A' }}</span>
-            </div>
-          </div>
-          <!-- Second Row -->
-          <div class="info-row">
-            <div class="info-label">
-              <label>Gender:</label>
-              <span>{{ patient?.gender || 'N/A' }}</span>
-            </div>
-            <div class="info-label">
-              <label>Birth Date:</label>
-              <span>{{ patient?.birthDate || 'N/A' }}</span>
-            </div>
-            <div v-if="patient?.address && patient.address.length > 0" class="info-label">
-              <label>Address:</label>
-              <span>{{ formatAddress(patient.address[0]) || 'N/A' }}</span>
-            </div>
-          </div>
-          <!-- Last Row: Social History -->
-          <div v-for="(entry, index) in socialHistoryEntries" :key="index" class="info-row">
-            <div class="info-label">
-              <label>Additional Information:</label>
-              <!-- Displaying the code and the note if it exists -->
-              <span>
-                {{ entry.code?.coding?.[0]?.display||'N/A'}}<span v-if="entry.note?.[0]?.text">, {{ cleanText(entry.valueCodeableConcept.coding[0].display) }}</span>
-                <span v-if="getReason(entry.encounter?.reference)">
-                  <span class="reason-label"> Reason:</span> {{ getReason(entry.encounter?.reference) }}
+            <!-- Last Row: Social History -->
+            <div v-for="(entry, index) in socialHistoryEntries" :key="index" class="additional-info-row">
+              <div class="additional-info-label">
+                <label>Additional Information:</label>
+                <span>{{ entry.code?.coding?.[0]?.display || 'N/A' }}
+                  <span v-if="entry.note?.[0]?.text">, {{ cleanText(entry.valueCodeableConcept.coding[0].display) }}</span>
+                  <span v-if="getReason(entry.encounter?.reference)">
+                    <span> → </span>
+                    <span class="reason-label-container">
+                      <span class="reason-label">Reason:</span> {{ getReason(entry.encounter?.reference) }}
+                    </span>
+                  </span>
                 </span>
-              </span>
+              </div>
             </div>
           </div>
-        </div>
         </transition>
       </div>
 
@@ -497,14 +499,14 @@ export default {
         const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
         this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
 
-      //await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
+        //await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
 
-      await this.fetchAllergyIntolerances(); //TODO: maybe remove
+        await this.fetchAllergyIntolerances(); //TODO: maybe remove
 
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  },
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    },
     cleanText(text) {
       if (text) {
         return text.replace(/\s?\(.*\)/, '').trim();
@@ -534,21 +536,21 @@ export default {
       return this.sortedEncounters.find(encounter => encounter.id === encounterId);
     },
 
-/*    async fetchAllergyGroups() {
-      try {
-        console.log("Fetching allergy groups...");
-        const response = await axios.get(
-            'https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts/420134006/children'
-        );
-        const data = response.data;
+    /*    async fetchAllergyGroups() {
+          try {
+            console.log("Fetching allergy groups...");
+            const response = await axios.get(
+                'https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts/420134006/children'
+            );
+            const data = response.data;
 
-        this.allergyGroups = data.map((item) => item.pt.term);
-        console.log("Allergy groups fetched:", this.allergyGroups);
-      } catch (error) {
-        console.error("Error fetching allergy groups:", error);
-        this.error = "Failed to fetch allergy groups. Please try again later.";
-      }
-    },*/
+            this.allergyGroups = data.map((item) => item.pt.term);
+            console.log("Allergy groups fetched:", this.allergyGroups);
+          } catch (error) {
+            console.error("Error fetching allergy groups:", error);
+            this.error = "Failed to fetch allergy groups. Please try again later.";
+          }
+        },*/
 
     async fetchAllergyGroups() {
       try {
@@ -1041,76 +1043,76 @@ export default {
       this.renderChart();
     },
 
-  // fetch allergy intolerances from the allergy reference in the composition resource
-  async fetchAllergyIntolerances() {
-    try {
-      const allergyReferences = this.extractAllergyIntoleranceReferences();
-      const allergyIntolerances = await Promise.all(
-        allergyReferences.map(ref => axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/${ref}`))
-      );
-      this.allergyIntolerances = allergyIntolerances.map(response => response.data);
-      this.allergyIntolerances.forEach(allergy => {
-        //TODO: put relevant data into diagram e.g. color code criticality here
+    // fetch allergy intolerances from the allergy reference in the composition resource
+    async fetchAllergyIntolerances() {
+      try {
+        const allergyReferences = this.extractAllergyIntoleranceReferences();
+        const allergyIntolerances = await Promise.all(
+            allergyReferences.map(ref => axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/${ref}`))
+        );
+        this.allergyIntolerances = allergyIntolerances.map(response => response.data);
+        this.allergyIntolerances.forEach(allergy => {
+          //TODO: put relevant data into diagram e.g. color code criticality here
 
-        let
-        extractedData;
-        extractedData = this.extractAllergyIntoleranceData(allergy);
-        this.extractedData = extractedData;
-        console.log(this.extractedData);
-      });
+          let
+              extractedData;
+          extractedData = this.extractAllergyIntoleranceData(allergy);
+          this.extractedData = extractedData;
+          console.log(this.extractedData);
+        });
 
-      // this is added to test the translation on the console
-      //this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'fr')
-      //console.log(this.extractedData2);
+        // this is added to test the translation on the console
+        //this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'fr')
+        //console.log(this.extractedData2);
 
-    } catch (error) {
-      console.error("Error fetching allergy intolerances:", error);
-    }
-  },
+      } catch (error) {
+        console.error("Error fetching allergy intolerances:", error);
+      }
+    },
 
-  // extract reference to allergy intolerance resources from the composition resource
-  extractAllergyIntoleranceReferences() {
-    const allergySection = this.compositionSections.find(section => section.title === 'Allergies Summary');
-    if (!allergySection) return [];
-    return allergySection.entry
-      .filter(entry => entry.reference.startsWith('AllergyIntolerance'))
-      .map(entry => entry.reference);
-  },
+    // extract reference to allergy intolerance resources from the composition resource
+    extractAllergyIntoleranceReferences() {
+      const allergySection = this.compositionSections.find(section => section.title === 'Allergies Summary');
+      if (!allergySection) return [];
+      return allergySection.entry
+          .filter(entry => entry.reference.startsWith('AllergyIntolerance'))
+          .map(entry => entry.reference);
+    },
 
-  // extract relevant data from allergy intolerance resources
-  extractAllergyIntoleranceData(allergy) {
-    const allergySnomedCode = allergy.code?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
-    const criticality = allergy.criticality || null;
-    const manifestationSnomedCode = allergy.reaction?.[0]?.manifestation?.[0]?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
-    const encounterReference = allergy.encounter?.reference || null;
+    // extract relevant data from allergy intolerance resources
+    extractAllergyIntoleranceData(allergy) {
+      const allergySnomedCode = allergy.code?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+      const criticality = allergy.criticality || null;
+      const manifestationSnomedCode = allergy.reaction?.[0]?.manifestation?.[0]?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+      const encounterReference = allergy.encounter?.reference || null;
 
-    return {
-      allergySnomedCode,
-      criticality,
-      manifestationSnomedCode,
-      encounterReference
-    };
-  },
+      return {
+        allergySnomedCode,
+        criticality,
+        manifestationSnomedCode,
+        encounterReference
+      };
+    },
 
-  // translate SNOMED code to human-readable term according to the specified language
-  // possible languages: Spanish: 'es' , English: 'en', French: 'fr', German 'de' (German is limited and does not work)
-  async  translateSnomedCode(snomedCode, language) {
-    const endpoints = {
+    // translate SNOMED code to human-readable term according to the specified language
+    // possible languages: Spanish: 'es' , English: 'en', French: 'fr', German 'de' (German is limited and does not work)
+    async  translateSnomedCode(snomedCode, language) {
+      const endpoints = {
         es: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-ES/2024-09-30/concepts?size=1&conceptIds=${snomedCode}`,
         en: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts?size=1&conceptIds=${snomedCode}`,
         fr: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-FR/2024-06-21/concepts?size=1&conceptIds=${snomedCode}`,
         de: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-DE/2024-05-15/concepts?size=1&conceptIds=${snomedCode}`
-    };
+      };
 
-    try {
+      try {
         const response = await axios.get(endpoints[language]);
         console.log("this data is translated => " + this.extractTerm(response.data, language))
         return this.extractTerm(response.data, language);
-    } catch (error) {
+      } catch (error) {
         console.error(`Error fetching SNOMED code translation: ${error}`);
         return null;
-    }
-  },
+      }
+    },
 
     // The method that finds the display name based on language
     findDisplayNameByLanguage(responseData, languageCode) {
@@ -1185,12 +1187,12 @@ export default {
       }
     },
 
-  // extract term from the response data
-  extractTerm(data, language) {
-    const descriptions = data.items[0].descriptions;
-    //find lang = language code in response code
-    return descriptions.find(desc => desc.lang === language).term;
-  },
+    // extract term from the response data
+    extractTerm(data, language) {
+      const descriptions = data.items[0].descriptions;
+      //find lang = language code in response code
+      return descriptions.find(desc => desc.lang === language).term;
+    },
 
     formatAddress(address) {
       // TODO: make it flexible if there is other data saved
@@ -1440,17 +1442,17 @@ export default {
       }
       return false;
     },
-},
+  },
 
 
-mounted() {
-  this.fetchPatientData();
-  this.fetchFoodAllergies();
-  this.fetchAllergyGroups();
-  this.renderChart();
+  mounted() {
+    this.fetchPatientData();
+    this.fetchFoodAllergies();
+    this.fetchAllergyGroups();
+    this.renderChart();
 
 
-}
+  }
 };
 </script>
 
@@ -1584,26 +1586,28 @@ mounted() {
   background-color: #fff;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
   border-radius: 8px;
-  display: flex; /* Change to flex for centering */
+  display: flex; /* Flexbox for centering */
   flex-direction: column; /* Stack children (title and canvas) vertically */
-  justify-content: center; /* Vertically center the content */
+  justify-content: flex-start; /* Align items from the start vertically */
   align-items: center; /* Horizontally center the content */
-  max-width: 600px; /* Limit the max width */
-  width: 100%; /* Ensure the chart fits within the container */
+  width: 100%; /* Ensure the chart container takes up the full available width */
+  max-width: 100%; /* Remove max-width so it scales with the window */
   position: relative;
 }
 
 .dashboard-chart h3 {
   font-size: 1.5em;
   margin-bottom: 15px; /* Space between the title and the chart */
-  color: #333; /* Adjust color as needed */
+  color: #333;
 }
 
 .dashboard-chart canvas {
-  width: 80% !important; /* Ensure the canvas takes up container width */
-  height: 80% !important; /* Fixed height for consistent layout */
-  margin-top: 5px; /* Optional: add space between the title and the graph */
+  width: 80% !important; /* Set canvas to take full width of the container */
+  height: 80% !important; /* Set a fixed height for consistent layout */
+  max-height: 100% !important; /* Allow it to scale within its container */
+  margin-top: 5px;
 }
+
 .dashboard-left,
 .dashboard-right {
   flex: 1;
@@ -1847,5 +1851,51 @@ button:hover {
 .reason-label {
   font-weight: 600; /* Makes the word 'Reason' bold */
 }
+
+.reason-label-container {
+  background-color: #fbe8e8;  /* Light pink background */
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.reason-label {
+  font-weight: 600;
+}
+
+/* Centering only the Additional Information section */
+.additional-info-row {
+  display: flex;
+  justify-content: center; /* Centers the content horizontally */
+  align-items: center; /* Centers vertically if needed */
+  width: 100%;
+}
+
+/* Ensure the labels and values are properly aligned */
+.additional-info-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: start;  /* Align items to the left within the label */
+  margin: 5px 0;
+}
+
+/* Space between label and value */
+.additional-info-label label {
+  font-weight: bold;
+  margin-right: 10px;  /* Space between label and the value */
+}
+
+/* Reason label styling */
+.additional-info-reason-container {
+  font-weight: bold;
+  color: #F84836;  /* Red color for the reason */
+}
+
+.additional-info-separator {
+  margin-left: 10px;
+  font-weight: bold;
+  color: #F84836;  /* Color for the separator */
+}
+
+
 
 </style>

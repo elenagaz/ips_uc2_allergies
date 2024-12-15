@@ -30,49 +30,49 @@
           Patient Information
         </h2>
         <transition name="expand-fade">
-        <div v-if="isPatientVisible" class="card-content">
-          <!-- First Row -->
-          <div class="info-row">
-            <div class="info-label">
-              <label>Name:</label>
-              <span>{{ patient?.name?.[0]?.given?.join(' ') || 'N/A' }}</span>
+          <div v-if="isPatientVisible" class="card-content">
+            <!-- First Row -->
+            <div class="info-row">
+              <div class="info-label">
+                <label>Name:</label>
+                <span>{{ patient?.name?.[0]?.given?.join(' ') || 'N/A' }}</span>
+              </div>
+              <div class="info-label">
+                <label>Last Name:</label>
+                <span>{{ patient?.name?.[0]?.family || 'N/A' }}</span>
+              </div>
+              <div class="info-label">
+                <label>ID:</label>
+                <span>{{ patient?.id || 'N/A' }}</span>
+              </div>
             </div>
-            <div class="info-label">
-              <label>Last Name:</label>
-              <span>{{ patient?.name?.[0]?.family || 'N/A' }}</span>
+            <!-- Second Row -->
+            <div class="info-row">
+              <div class="info-label">
+                <label>Gender:</label>
+                <span>{{ patient?.gender || 'N/A' }}</span>
+              </div>
+              <div class="info-label">
+                <label>Birth Date:</label>
+                <span>{{ patient?.birthDate || 'N/A' }}</span>
+              </div>
+              <div v-if="patient?.address && patient.address.length > 0" class="info-label">
+                <label>Address:</label>
+                <span>{{ formatAddress(patient.address[0]) || 'N/A' }}</span>
+              </div>
             </div>
-            <div class="info-label">
-              <label>ID:</label>
-              <span>{{ patient?.id || 'N/A' }}</span>
-            </div>
-          </div>
-          <!-- Second Row -->
-          <div class="info-row">
-            <div class="info-label">
-              <label>Gender:</label>
-              <span>{{ patient?.gender || 'N/A' }}</span>
-            </div>
-            <div class="info-label">
-              <label>Birth Date:</label>
-              <span>{{ patient?.birthDate || 'N/A' }}</span>
-            </div>
-            <div v-if="patient?.address && patient.address.length > 0" class="info-label">
-              <label>Address:</label>
-              <span>{{ formatAddress(patient.address[0]) || 'N/A' }}</span>
-            </div>
-          </div>
-          <!-- Last Row: Social History -->
-          <div v-for="(entry, index) in socialHistoryEntries" :key="index" class="info-row">
-            <div class="info-label">
-              <label>Additional Information:</label>
-              <!-- Displaying the code and the note if it exists -->
-              <span>
+            <!-- Last Row: Social History -->
+            <div v-for="(entry, index) in socialHistoryEntries" :key="index" class="info-row">
+              <div class="info-label">
+                <label>Additional Information:</label>
+                <!-- Displaying the code and the note if it exists -->
+                <span>
                 {{ entry.code?.coding?.[0]?.display || 'N/A' }}
                 <span v-if="entry.note?.[0]?.text">, {{ entry.note[0].text }}</span>
               </span>
+              </div>
             </div>
           </div>
-        </div>
         </transition>
       </div>
 
@@ -452,21 +452,21 @@ export default {
     }
   },
   methods: {
-  async fetchPatientData() {
-    try {
-      const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
-      this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
+    async fetchPatientData() {
+      try {
+        const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
+        this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
 
-      await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
+        const translated_Term = await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
+        console.log("Translation to test " + translated_Term)
+        await this.fetchAllergyIntolerances(); //TODO: maybe remove
 
-      await this.fetchAllergyIntolerances(); //TODO: maybe remove
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    },
 
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  },
-
-    async fetchFoodAllergies() {
+    /*async fetchFoodAllergies() {
       const SNOMED_API_BASE = 'https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/concepts';
       const relevantConceptIds = ["414285001", "235719002"];
 
@@ -530,79 +530,109 @@ export default {
         console.error('Error fetching food allergies:', error);
         this.error = 'Failed to fetch food allergies. Please try again later.';
       }
+    },*/
+
+    /*async fetchFoodAllergies() {
+      console.log("fetching the data from backend?")
+      try {
+        const response = await axios.get('http://localhost:5000/api/food-allergies');
+        this.allergies = response.data;
+
+        console.log('Food allergies fetched successfully:', this.allergies);
+
+        // Call renderChart after fetching data
+        this.renderChart();
+      } catch (error) {
+        console.error('Error fetching food allergies:', error);
+        this.error = 'Failed to fetch food allergies. Please try again later.';
+      }
+    },*/
+
+    // fetch allergy intolerances from the allergy reference in the composition resource
+    async fetchAllergyIntolerances() {
+      try {
+        const allergyReferences = this.extractAllergyIntoleranceReferences();
+        const allergyIntolerances = await Promise.all(
+            allergyReferences.map(ref => axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/${ref}`))
+        );
+        this.allergyIntolerances = allergyIntolerances.map(response => response.data);
+        this.allergyIntolerances.forEach(allergy => {
+          //TODO: put relevant data into diagram e.g. color code criticality here
+
+          let
+              extractedData;
+          extractedData = this.extractAllergyIntoleranceData(allergy);
+          this.extractedData = extractedData;
+          console.log(this.extractedData);
+        });
+        console.log(this.extractedData.allergySnomedCode)
+
+        // this is added to test the translation on the console
+        this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'es')
+        console.log(this.extractedData2);
+
+      } catch (error) {
+        console.error("Error fetching allergy intolerances:", error);
+      }
     },
 
-  // fetch allergy intolerances from the allergy reference in the composition resource
-  async fetchAllergyIntolerances() {
-    try {
-      const allergyReferences = this.extractAllergyIntoleranceReferences();
-      const allergyIntolerances = await Promise.all(
-        allergyReferences.map(ref => axios.get(`https://ips-challenge.it.hs-heilbronn.de/fhir/${ref}`))
-      );
-      this.allergyIntolerances = allergyIntolerances.map(response => response.data);
-      this.allergyIntolerances.forEach(allergy => {
-        //TODO: put relevant data into diagram e.g. color code criticality here
+    // extract reference to allergy intolerance resources from the composition resource
+    extractAllergyIntoleranceReferences() {
+      const allergySection = this.compositionSections.find(section => section.title === 'Allergies Summary');
+      if (!allergySection) return [];
+      return allergySection.entry
+          .filter(entry => entry.reference.startsWith('AllergyIntolerance'))
+          .map(entry => entry.reference);
+    },
 
-        let
-        extractedData;
-        extractedData = this.extractAllergyIntoleranceData(allergy);
-        this.extractedData = extractedData;
-        console.log(this.extractedData);
-      });
-      console.log(this.extractedData.allergySnomedCode)
+    // extract relevant data from allergy intolerance resources
+    extractAllergyIntoleranceData(allergy) {
+      const allergySnomedCode = allergy.code?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+      const criticality = allergy.criticality || null;
+      const manifestationSnomedCode = allergy.reaction?.[0]?.manifestation?.[0]?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
+      const encounterReference = allergy.encounter?.reference || null;
 
-      // this is added to test the translation on the console
-      this.extractedData2 = this.translateSnomedCode(this.extractedData.allergySnomedCode,'fr')
-      console.log(this.extractedData2);
+      return {
+        allergySnomedCode,
+        criticality,
+        manifestationSnomedCode,
+        encounterReference
+      };
+    },
 
-    } catch (error) {
-      console.error("Error fetching allergy intolerances:", error);
-    }
-  },
-
-  // extract reference to allergy intolerance resources from the composition resource
-  extractAllergyIntoleranceReferences() {
-    const allergySection = this.compositionSections.find(section => section.title === 'Allergies Summary');
-    if (!allergySection) return [];
-    return allergySection.entry
-      .filter(entry => entry.reference.startsWith('AllergyIntolerance'))
-      .map(entry => entry.reference);
-  },
-
-  // extract relevant data from allergy intolerance resources
-  extractAllergyIntoleranceData(allergy) {
-    const allergySnomedCode = allergy.code?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
-    const criticality = allergy.criticality || null;
-    const manifestationSnomedCode = allergy.reaction?.[0]?.manifestation?.[0]?.coding?.find(coding => coding.system === 'http://snomed.info/sct')?.code || null;
-    const encounterReference = allergy.encounter?.reference || null;
-
-    return {
-      allergySnomedCode,
-      criticality,
-      manifestationSnomedCode,
-      encounterReference
-    };
-  },
-
-  // translate SNOMED code to human-readable term according to the specified language
-  // possible languages: Spanish: 'es' , English: 'en', French: 'fr', German 'de' (German is limited and does not work)
-  async  translateSnomedCode(snomedCode, language) {
-    const endpoints = {
+    // translate SNOMED code to human-readable term according to the specified language
+/*    // possible languages: Spanish: 'es' , English: 'en', French: 'fr', German 'de' (German is limited and does not work)
+    async  translateSnomedCode(snomedCode, language) {
+      console.log("snomed translation step---------------")
+      const endpoints = {
         es: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-ES/2024-09-30/concepts?size=1&conceptIds=${snomedCode}`,
         en: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts?size=1&conceptIds=${snomedCode}`,
         fr: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-FR/2024-06-21/concepts?size=1&conceptIds=${snomedCode}`,
         de: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-DE/2024-05-15/concepts?size=1&conceptIds=${snomedCode}`
-    };
+      };
 
-    try {
+      try {
         const response = await axios.get(endpoints[language]);
         console.log("this data is translated => " + this.extractTerm(response.data, language))
         return this.extractTerm(response.data, language);
-    } catch (error) {
+      } catch (error) {
         console.error(`Error fetching SNOMED code translation: ${error}`);
         return null;
-    }
-  },
+      }
+    },*/
+
+    async translateSnomedCode(snomedCode, language) {
+      try {
+        const response = await axios.get('http://localhost:5000/api/translate-snomed', {
+          params: { snomedCode, language }
+        });
+        console.log("Translated data =>", response.data.term);
+        return response.data.term;
+      } catch (error) {
+        console.error(`Error fetching SNOMED code translation: ${error}`);
+        return null;
+      }
+    },
 
     // The method that finds the display name based on language
     findDisplayNameByLanguage(responseData, languageCode) {
@@ -654,7 +684,7 @@ export default {
           params: { system, loincCode },
         });
         // Log the entire response data
-        //console.log("LOINC Code Response Data:", response.data);
+        console.log("LOINC Code Response Data:", response.data);
 
         if (response.data && response.data.parameter && Array.isArray(response.data.parameter)) {
           const displayTerm = response.data.parameter.find(param => param.name === 'display');
@@ -677,12 +707,12 @@ export default {
       }
     },
 
-  // extract term from the response data
-  extractTerm(data, language) {
-    const descriptions = data.items[0].descriptions;
-    //find lang = language code in response code
-    return descriptions.find(desc => desc.lang === language).term;
-  },
+    // extract term from the response data
+    extractTerm(data, language) {
+      const descriptions = data.items[0].descriptions;
+      //find lang = language code in response code
+      return descriptions.find(desc => desc.lang === language).term;
+    },
 
     formatAddress(address) {
       // TODO: make it flexible if there is other data saved
@@ -726,7 +756,7 @@ export default {
       //console.log("Lock status:", this.isLocked ? "Locked" : "Unlocked");
     },
 
-    renderChart() {
+   /* renderChart() {
       if (this.chart) {
         this.chart.destroy();
       }
@@ -879,7 +909,7 @@ export default {
 
       // Ensure the return value is always an array
       return matchingSecondLevelCodes.length > 0 ? matchingSecondLevelCodes : [];
-    },
+    },*/
 
     openPopOut(allergyType, allergyValue) {
       this.selectedAllergy = allergyType;
@@ -924,15 +954,15 @@ export default {
       }
       return false;
     },
-},
+  },
 
 
-mounted() {
-  this.fetchFoodAllergies(); // Automatically fetch data when the component is mounted
-  this.fetchPatientData();
-  this.renderChart();
+  mounted() {
+    //this.fetchFoodAllergies(); // Automatically fetch data when the component is mounted
+    this.fetchPatientData();
+    //this.renderChart();
 
-}
+  }
 };
 </script>
 

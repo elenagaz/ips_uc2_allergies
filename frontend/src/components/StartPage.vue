@@ -374,7 +374,8 @@ export default {
       extractedData: [],
       encounterIds: [],
       groupedObservations: [],
-      selectedEncounterObservations: {}
+      selectedEncounterObservations: {},
+      filteredAllergies: [],
 
     };
   },
@@ -460,8 +461,6 @@ export default {
         const translated_Term = await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
         console.log("Translation to test " + translated_Term)
         await this.fetchAllergyIntolerances(); //TODO: maybe remove
-        await this.fetchLookup();
-
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -709,14 +708,14 @@ export default {
       }
     },
 
-    async fetchLookup() {
+/*    async fetchLookup() {
       try {
         const response = await axios.get('http://localhost:5000/test');
         console.log('FHIR Lookup Response:', response.data);
       } catch (error) {
         console.error('Error fetching FHIR lookup:', error);
       }
-    },
+    },*/
 
     // extract term from the response data
     extractTerm(data, language) {
@@ -770,38 +769,42 @@ export default {
     async fetchFoodAllergies() {
       console.log("Fetching the data from backend...");
       try {
-        // Fetch data from your backend
-        const response = await axios.get('http://localhost:5000/api/food-allergies');
-        const backendData = response.data;
+        // Fetch hierarchical allergy data from the backend
+        const response = await axios.get('http://localhost:5000/api/food-allergies'); // Update with your backend's endpoint
+        const data = response.data;
 
-        // If backend provides a structure with parent-child relationships
-        const processAllergies = (allergyData) => {
-          const processChildren = (children) => {
-            return children.map(child => ({
-              name: child.name || child.conceptId, // Use name if available
+        // Transform data to match the expected chart structure
+        const allergies = data.map((allergy) => ({
+          conceptId: allergy.conceptId,
+          name: allergy.name,
+          subgroups: allergy.subgroups.map((subgroup) => ({
+            conceptId: subgroup.conceptId,
+            name: subgroup.name,
+            children: subgroup.children.map((child) => ({
               conceptId: child.conceptId,
-              children: child.children ? processChildren(child.children) : [],
-            }));
-          };
+              name: child.name,
+            })),
+          })),
+        }));
 
-          return allergyData.map(allergy => ({
-            name: allergy.name,
-            type: allergy.type || allergy.name, // Default type to name
-            value: allergy.value || Math.floor(Math.random() * 100), // Use provided value or mock value
-            conceptId: allergy.conceptId,
-            subgroups: allergy.children ? processChildren(allergy.children) : [],
-          }));
-        };
+        // Update component state with fetched and transformed data
+        this.allergies = allergies;
 
-        // Process backend data
-        this.allergies = processAllergies(backendData);
-        console.log('Food allergies processed successfully:', this.allergies);
+        const excludedIds = ["419342009", "447961002", "293861001", "419814004", "5611000122107",
+        "294097003", "419101002", "294095006", "43280700", "294298002", "293842000", "418397007", "294291008",
+        "293868007", "712842007"]; // Add the unwanted conceptIds here
 
-        // Render the chart after processing
+         this.filteredAllergies = allergies.map(allergy => ({
+          ...allergy,
+          subgroups: allergy.subgroups.filter(subgroup => !excludedIds.includes(subgroup.conceptId))
+        })).filter(allergy => !excludedIds.includes(allergy.conceptId));
+
+
+
+        // Call renderChart after data is ready
         this.renderChart();
       } catch (error) {
-        console.error('Error fetching food allergies:', error);
-        this.error = 'Failed to fetch food allergies. Please try again later.';
+        console.error('Error fetching and preparing allergy data:', error.message);
       }
     },
 
@@ -813,7 +816,7 @@ export default {
        const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
 
        // Extract and process second-level allergies
-       const secondLevelAllergies = this.allergies.flatMap((allergy) =>
+       const secondLevelAllergies = this.filteredAllergies.flatMap((allergy) =>
            allergy.subgroups.map((subgroup) => ({
              name: subgroup.name.replace(/^(Allergy to|Intolerance to)\s+/i, ""), // Cleaned-up name
              fullName: subgroup.name, // Full name for tooltip

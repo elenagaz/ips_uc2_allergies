@@ -36,16 +36,7 @@ const combinedCAs = tls.rootCertificates
     .concat([additionalCa1, additionalCa2]);
 
 
-/*// Path to your .p12 certificate file
-const p12Path = 'C:\\Users\\Lenovo\\Downloads\\Heilbronn_Student_Grouplegacy.p12';
 
-// Convert the .p12 certificate to PEM format
-const cert = fs.readFileSync(p12Path);
-
-// Set up the HTTPS agent with the certificate and the passphrase
-const httpsAgent = new https.Agent({
-    pfx: cert,
-});*/
 
 const agent = new https.Agent({
     key: key,
@@ -55,78 +46,99 @@ const agent = new https.Agent({
     rejectUnauthorized: true, // Enforces SSL certificate validation
 });
 
-// Test endpoint to verify backend setup
-app.get('/test', async (req, res) => {
+const FHIR_API_BASE = 'https://public-test.mii-termserv.de/fhir/CodeSystem/$lookup';
+
+// Function to fetch and process FHIR data
+const fetchFhirData = async (system, code) => {
     try {
-        const response = await axios.get('https://public-test.mii-termserv.de/fhir/CodeSystem/$lookup', {
-            params: { system: 'http://snomed.info/sct', code: '48821000119104' },
+        const response = await axios.get(FHIR_API_BASE, {
+            params: { system, code },
             httpsAgent: agent,
         });
 
-        console.log('FHIR Lookup Response:', response.data);
-        res.send('Request successful! Check your console for the response.');
+        const data = response.data;
+
+        // Extract the display name
+        const displayParameter = data.parameter.find((param) => param.name === 'display');
+        const displayName = displayParameter ? displayParameter.valueString : null;
+
+        // Extract parent codes
+        const parentParameters = data.parameter.filter(
+            (param) => param.name === 'property' && param.part.some((p) => p.name === 'code' && p.valueCode === 'parent')
+        );
+        const parentCodes = parentParameters.map((param) =>
+            param.part.find((p) => p.name === 'value' && p.valueCode).valueCode
+        );
+
+        // Extract child codes
+        const childParameters = data.parameter.filter(
+            (param) => param.name === 'property' && param.part.some((p) => p.name === 'code' && p.valueCode === 'child')
+        );
+        const childCodes = childParameters.map((param) =>
+            param.part.find((p) => p.name === 'value' && p.valueCode).valueCode
+        );
+
+        return {
+            conceptId: code,
+            name: displayName,
+            parentCodes,
+            childCodes,
+        };
     } catch (error) {
-        console.error('Error making request:', error.message);
-        res.status(500).send(`Error occurred: ${error.message}`);
-    }
-});
-
-/*// Test endpoint to confirm the backend setup
-app.get('/test', async (req, res) => {
-    try {
-        console.log(fs.existsSync('C:/Users/Lenovo/Downloads/Heilbronn_Student_Grouplegacy.p12'));
-
-        const agent = new https.Agent({
-            pfx: fs.readFileSync('C:/Users/Lenovo/Downloads/Heilbronn_Student_Grouplegacy.p12'),
-            minVersion: 'TLSv1.2'
-        });
-
-        const response = await axios.get('https://public-test.mii-termserv.de/fhir/CodeSystem/$lookup', {
-            params: {
-                system: 'http://snomed.info/sct',
-                code: '48821000119104'
-            },
-            httpsAgent: agent,
-        });
-
-        console.log('FHIR Lookup Response:', response.data);
-        res.send('Request successful! Check console for response.');
-    } catch (error) {
-        console.error('Error making request:', error);
-        res.status(500).send('Error occurred! Check console for details.');
-    }
-});*/
-
-/*// URL for SNOMED lookup
-const snomedUrl = 'https://public-test.mii-termserv.de/fhir/CodeSystem/$lookup?system=http://snomed.info/sct&code=48821000119104';
-
-// Function to fetch SNOMED concept data
-const fetchSNOMEDConcept = async (url) => {
-    try {
-        console.log(`Making request to: ${url}`);
-        const response = await axios.get(url, { httpsAgent });
-
-        if (response.status === 200) {
-            console.log('Response data:', response.data);
-            return response.data;
-        } else {
-            console.error(`Request failed with status: ${response.status}`);
-            return null;
-        }
-    } catch (error) {
-        console.error(`Error fetching data:`, error.response ? error.response.data : error.message);
-        return null;
+        console.error(`Error fetching FHIR data for code ${code}:`, error.message);
+        throw error;
     }
 };
 
-// Fetch the data from SNOMED
-fetchSNOMEDConcept(snomedUrl).then((data) => {
-    if (data) {
-        console.log('Fetched and processed data:', data);
-    } else {
-        console.log('Failed to fetch or process data');
+// Function to construct the hierarchical structure
+const constructHierarchy = async (conceptCodes) => {
+    const allergies = [];
+
+    for (const code of conceptCodes) {
+        const allergy = await fetchFhirData('http://snomed.info/sct', code);
+
+        // Fetch child data for subgroups
+        const subgroups = await Promise.all(
+            allergy.childCodes.map(async (childCode) => {
+                const subgroup = await fetchFhirData('http://snomed.info/sct', childCode);
+
+                // Fetch children for each subgroup
+                const children = await Promise.all(
+                    subgroup.childCodes.map(async (childCode) => fetchFhirData('http://snomed.info/sct', childCode))
+                );
+
+                return {
+                    ...subgroup,
+                    children,
+                };
+            })
+        );
+
+        allergies.push({
+            ...allergy,
+            subgroups,
+        });
     }
-});*/
+
+    return allergies;
+};
+
+// API Endpoint to fetch and process hierarchical data
+app.get('/api/food-allergies', async (req, res) => {
+    try {
+        console.log("in the fetching")
+        const conceptCodes = ['414285001', '235719002']; // Replace with relevant top-level concept codes
+
+        const results = await constructHierarchy(conceptCodes);
+        console.log("done with pre-process")
+
+        res.json(results);
+    } catch (error) {
+        console.error('Error fetching data:', error.message);
+        res.status(500).send(`Failed to fetch data: ${error.message}`);
+    }
+});
+
 
 app.get('/proxy', async (req, res) => {
     const { system, loincCode } = req.query;
@@ -161,48 +173,6 @@ app.get('/proxy', async (req, res) => {
         });
     }
 });
-
-/*
-// Fetch the data from SNOMED
-fetchSNOMEDConcept(snomedUrl).then((data) => {
-    if (data) {
-        console.log('Fetched and processed data:', data);
-    } else {
-        console.log('Failed to fetch or process data');
-    }
-});
-
-// Function to process fetched SNOMED data and extract parent-child relationships
-const processFetchedData = (data) => {
-    if (data && data.parameter) {
-        return data.parameter.map((param) => {
-            // Extracting the concept ID, name, and associated properties
-            const conceptData = {
-                name: param.valueString || param.valueCode,  // Use name or code as fallback
-                conceptId: param.valueCode,  // Concept ID
-                parent: null,  // Parent concept, if exists
-                children: []  // Children concepts, if exist
-            };
-
-            // Extracting parent concept
-            if (param.property) {
-                param.property.forEach((prop) => {
-                    if (prop.name === 'parent') {
-                        conceptData.parent = prop.valueCode; // Set the parent concept code
-                    } else if (prop.name === 'child') {
-                        conceptData.children.push(prop.valueCode); // Add child concept codes
-                    }
-                });
-            }
-
-            return conceptData; // Return the processed concept data
-        });
-    }
-
-    return [];  // Return an empty array if no valid data is found
-};
-*/
-
 
 // Helper Function to Translate SNOMED Code
 async function translateSnomedCode(snomedCode, language) {

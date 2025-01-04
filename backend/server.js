@@ -1,31 +1,132 @@
 const express = require('express');
 const axios = require('axios');
+const https = require('https');  // Add this line to import the https module
 const HttpsProxyAgent = require('https-proxy-agent'); // Ensure this is installed
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
+const tls = require('tls');
+
 
 const cors = require('cors');
 require('dotenv').config(); // Load environment variables
 
 const app = express();
 
-
-
-
 // Enable CORS for all routes
 app.use(cors());
 
-const apiUrl = 'http://3.120.27.213:8084';
-const SNOMED_API_BASE = 'https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/concepts';
+//const apiUrl = 'http://3.120.27.213:8084';
 
 // Rate limiting (optional)
 const rateLimit = require('express-rate-limit');
+//const {Agent} = require("node:https");
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests per windowMs
 });
 app.use(limiter);
 
+const key = fs.readFileSync('C:/Users/Lenovo/Downloads/key.pem');
+const cert = fs.readFileSync('C:/Users/Lenovo/Downloads/cert.pem');
+const additionalCa1 = fs.readFileSync('C:/Users/Lenovo/Downloads/additional_cert_1.pem', 'utf8');
+const additionalCa2 = fs.readFileSync('C:/Users/Lenovo/Downloads/additional_cert_2.pem', 'utf8');
+const combinedCAs = tls.rootCertificates
+    .map(cert => Buffer.from(cert, 'ascii').toString('utf8'))
+    .concat([additionalCa1, additionalCa2]);
 
+
+/*// Path to your .p12 certificate file
+const p12Path = 'C:\\Users\\Lenovo\\Downloads\\Heilbronn_Student_Grouplegacy.p12';
+
+// Convert the .p12 certificate to PEM format
+const cert = fs.readFileSync(p12Path);
+
+// Set up the HTTPS agent with the certificate and the passphrase
+const httpsAgent = new https.Agent({
+    pfx: cert,
+});*/
+
+const agent = new https.Agent({
+    key: key,
+    cert: cert,
+    ca: combinedCAs,
+    minVersion: 'TLSv1.2', // Ensures using TLS version 1.2 or higher
+    rejectUnauthorized: true, // Enforces SSL certificate validation
+});
+
+// Test endpoint to verify backend setup
+app.get('/test', async (req, res) => {
+    try {
+        const response = await axios.get('https://public-test.mii-termserv.de/fhir/CodeSystem/$lookup', {
+            params: { system: 'http://snomed.info/sct', code: '48821000119104' },
+            httpsAgent: agent,
+        });
+
+        console.log('FHIR Lookup Response:', response.data);
+        res.send('Request successful! Check your console for the response.');
+    } catch (error) {
+        console.error('Error making request:', error.message);
+        res.status(500).send(`Error occurred: ${error.message}`);
+    }
+});
+
+/*// Test endpoint to confirm the backend setup
+app.get('/test', async (req, res) => {
+    try {
+        console.log(fs.existsSync('C:/Users/Lenovo/Downloads/Heilbronn_Student_Grouplegacy.p12'));
+
+        const agent = new https.Agent({
+            pfx: fs.readFileSync('C:/Users/Lenovo/Downloads/Heilbronn_Student_Grouplegacy.p12'),
+            minVersion: 'TLSv1.2'
+        });
+
+        const response = await axios.get('https://public-test.mii-termserv.de/fhir/CodeSystem/$lookup', {
+            params: {
+                system: 'http://snomed.info/sct',
+                code: '48821000119104'
+            },
+            httpsAgent: agent,
+        });
+
+        console.log('FHIR Lookup Response:', response.data);
+        res.send('Request successful! Check console for response.');
+    } catch (error) {
+        console.error('Error making request:', error);
+        res.status(500).send('Error occurred! Check console for details.');
+    }
+});*/
+
+/*// URL for SNOMED lookup
+const snomedUrl = 'https://public-test.mii-termserv.de/fhir/CodeSystem/$lookup?system=http://snomed.info/sct&code=48821000119104';
+
+// Function to fetch SNOMED concept data
+const fetchSNOMEDConcept = async (url) => {
+    try {
+        console.log(`Making request to: ${url}`);
+        const response = await axios.get(url, { httpsAgent });
+
+        if (response.status === 200) {
+            console.log('Response data:', response.data);
+            return response.data;
+        } else {
+            console.error(`Request failed with status: ${response.status}`);
+            return null;
+        }
+    } catch (error) {
+        console.error(`Error fetching data:`, error.response ? error.response.data : error.message);
+        return null;
+    }
+};
+
+// Fetch the data from SNOMED
+fetchSNOMEDConcept(snomedUrl).then((data) => {
+    if (data) {
+        console.log('Fetched and processed data:', data);
+    } else {
+        console.log('Failed to fetch or process data');
+    }
+});*/
 
 app.get('/proxy', async (req, res) => {
     const { system, loincCode } = req.query;
@@ -62,197 +163,46 @@ app.get('/proxy', async (req, res) => {
 });
 
 /*
-// Helper functions
-const fetchChildren = async (conceptId) => {
-    try {
-        const response = await axios.get(`${SNOMED_API_BASE}/${conceptId}/children`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching children for concept ${conceptId}:`, error.message);
-        throw error;
-    }
-};
-
-const fetchConcept = async (conceptId) => {
-    try {
-        const response = await axios.get(`${SNOMED_API_BASE}/${conceptId}`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching concept ${conceptId}:`, error.message);
-        throw error;
-    }
-};
-
-const fetchAllSubgroups = async (conceptId) => {
-    const children = await fetchChildren(conceptId);
-    if (!children || children.length === 0) return [];
-    const result = await Promise.all(
-        children.map(async (child) => {
-            const childChildren = await fetchAllSubgroups(child.conceptId);
-            return {
-                name: child.pt.term,
-                conceptId: child.conceptId,
-                children: childChildren,
-            };
-        })
-    );
-    return result;
-};
-
-// API endpoint
-app.get('/api/food-allergies', async (req, res) => {
-    const relevantConceptIds = ["414285001", "235719002"];
-
-    try {
-        const allergies = await Promise.all(
-            relevantConceptIds.map(async (conceptId) => {
-                const concept = await fetchConcept(conceptId);
-                const subgroups = await fetchAllSubgroups(conceptId);
-                return {
-                    name: concept.pt.term,
-                    type: concept.pt.term,
-                    value: Math.floor(Math.random() * 100), // Mock value for testing
-                    conceptId,
-                    subgroups,
-                };
-            })
-        );
-
-        res.json(allergies);
-    } catch (error) {
-        console.error('Error fetching food allergies:', error.message);
-        res.status(500).json({ error: 'Failed to fetch food allergies' });
+// Fetch the data from SNOMED
+fetchSNOMEDConcept(snomedUrl).then((data) => {
+    if (data) {
+        console.log('Fetched and processed data:', data);
+    } else {
+        console.log('Failed to fetch or process data');
     }
 });
+
+// Function to process fetched SNOMED data and extract parent-child relationships
+const processFetchedData = (data) => {
+    if (data && data.parameter) {
+        return data.parameter.map((param) => {
+            // Extracting the concept ID, name, and associated properties
+            const conceptData = {
+                name: param.valueString || param.valueCode,  // Use name or code as fallback
+                conceptId: param.valueCode,  // Concept ID
+                parent: null,  // Parent concept, if exists
+                children: []  // Children concepts, if exist
+            };
+
+            // Extracting parent concept
+            if (param.property) {
+                param.property.forEach((prop) => {
+                    if (prop.name === 'parent') {
+                        conceptData.parent = prop.valueCode; // Set the parent concept code
+                    } else if (prop.name === 'child') {
+                        conceptData.children.push(prop.valueCode); // Add child concept codes
+                    }
+                });
+            }
+
+            return conceptData; // Return the processed concept data
+        });
+    }
+
+    return [];  // Return an empty array if no valid data is found
+};
 */
 
-// // SNOMED translation API
-// app.get('/api/translate-snomed', async (req, res) => {
-//     const { snomedCode, language } = req.query;
-//
-//     // Validate input
-//     if (!snomedCode || !language) {
-//         return res.status(400).json({ error: 'Missing "snomedCode" or "language" query parameter' });
-//     }
-//
-//     const endpoints = {
-//         es: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-ES/2024-09-30/concepts?size=1&conceptIds=${snomedCode}`,
-//         en: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts?size=1&conceptIds=${snomedCode}`,
-//         fr: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-FR/2024-06-21/concepts?size=1&conceptIds=${snomedCode}`,
-//         de: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-DE/2024-05-15/concepts?size=1&conceptIds=${snomedCode}`,
-//     };
-//
-//     if (!endpoints[language]) {
-//         return res.status(400).json({ error: 'Unsupported language. Possible values: es, en, fr, de.' });
-//     }
-//
-//     try {
-//         console.log(endpoints[language])
-//         const response = await axios.get(endpoints[language]);
-//         const term = extractTerm(response.data, language);
-//         res.json({ term });
-//     } catch (error) {
-//         console.error(`Error translating SNOMED code ${snomedCode}:`, error.message);
-//         res.status(500).json({ error: 'Failed to fetch SNOMED translation' });
-//     }
-// });
-/*
-app.get('/api/translate-snomed', async (req, res) => {
-    const { snomedCode, language } = req.query;
-
-    // Validate input
-    if (!snomedCode || !language) {
-        return res.status(400).json({ error: 'Missing "snomedCode" or "language" query parameter' });
-    }
-
-    const endpoints = {
-        es: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-ES/2024-09-30/concepts?size=1&conceptIds=${snomedCode}`,
-        en: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/2024-11-01/concepts?size=1&conceptIds=${snomedCode}`,
-        fr: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-FR/2024-06-21/concepts?size=1&conceptIds=${snomedCode}`,
-        de: `https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/SNOMEDCT-DE/2024-05-15/concepts?size=1&conceptIds=${snomedCode}`,
-    };
-
-    if (!endpoints[language]) {
-        return res.status(400).json({ error: 'Unsupported language. Possible values: es, en, fr, de.' });
-    }
-
-    try {
-        console.log(`Making request to: ${endpoints[language]}`);
-        const response = await axios.get(endpoints[language], {
-            timeout: 20000, // Increased timeout
-        });
-        //here
-        return response.data;
-        const term = extractTerm(response.data, language);
-        res.json({ term });
-    } catch (error) {
-        console.error(`Error translating SNOMED code ${snomedCode}:`, {
-            message: error.message,
-            code: error.code,
-            stack: error.stack,
-        });
-
-        if (error.code === 'ECONNABORTED') {
-            return res.status(504).json({
-                error: 'Request timed out. The SNOMED translation API server may be slow or unresponsive.',
-                details: error.message
-            });
-        }
-
-        if (error.response) {
-            return res.status(error.response.status).json({
-                error: `SNOMED API responded with error ${error.response.status}`,
-                details: error.response.data || 'No additional error details available'
-            });
-        }
-
-        if (error.request) {
-            return res.status(502).json({
-                error: 'No response received from the SNOMED translation API.',
-                details: error.request
-            });
-        }
-
-        return res.status(500).json({
-            error: 'An error occurred while translating the SNOMED code.',
-            details: error.message
-        });
-    }
-});
-
-
-// Helper function to extract the term from SNOMED API response
-function extractTerm(data, language) {
-    // Assuming the response structure includes an array with the desired term in `data.items[0].pt.term`
-    try {
-        return data.items[0].pt.term || 'Translation not found';
-    } catch {
-        return 'Translation not found';
-    }
-}*/
-
-
-/*app.get('/test-snomed', async (req, res) => {
-    const { v4: uuidv4 } = require('uuid');
-
-    const headers = {
-        'User-Agent': 'PostmanRuntime/7.43.0',
-        'Accept': '*!/!*',
-        'Postman-Token': uuidv4(), // Generate a new token for each request
-        'Host': 'browser.ihtsdotools.org',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive'
-    };
-    try {
-        const response = await axios.get('https://browser.ihtsdotools.org/fhir/ValueSet/$expand?url=http://snomed.info/sct/449081005?fhir_vs&displayLanguage=es&filter=48821000119104', {
-            headers: headers
-        });
-        res.status(200).json({ success: true, data: response.data });
-    } catch (error) {
-        console.error('Error:', error.response?.status, error.response?.data || error.message);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});*/
 
 // Helper Function to Translate SNOMED Code
 async function translateSnomedCode(snomedCode, language) {

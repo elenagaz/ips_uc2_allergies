@@ -460,11 +460,13 @@ export default {
         const translated_Term = await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
         console.log("Translation to test " + translated_Term)
         await this.fetchAllergyIntolerances(); //TODO: maybe remove
+        await this.fetchLookup();
 
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     },
+//TODO: use the other server
 
     /*async fetchFoodAllergies() {
       const SNOMED_API_BASE = 'https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/concepts';
@@ -707,6 +709,15 @@ export default {
       }
     },
 
+    async fetchLookup() {
+      try {
+        const response = await axios.get('http://localhost:5000/test');
+        console.log('FHIR Lookup Response:', response.data);
+      } catch (error) {
+        console.error('Error fetching FHIR lookup:', error);
+      }
+    },
+
     // extract term from the response data
     extractTerm(data, language) {
       const descriptions = data.items[0].descriptions;
@@ -756,160 +767,198 @@ export default {
       //console.log("Lock status:", this.isLocked ? "Locked" : "Unlocked");
     },
 
-   /* renderChart() {
-      if (this.chart) {
-        this.chart.destroy();
+    async fetchFoodAllergies() {
+      console.log("Fetching the data from backend...");
+      try {
+        // Fetch data from your backend
+        const response = await axios.get('http://localhost:5000/api/food-allergies');
+        const backendData = response.data;
+
+        // If backend provides a structure with parent-child relationships
+        const processAllergies = (allergyData) => {
+          const processChildren = (children) => {
+            return children.map(child => ({
+              name: child.name || child.conceptId, // Use name if available
+              conceptId: child.conceptId,
+              children: child.children ? processChildren(child.children) : [],
+            }));
+          };
+
+          return allergyData.map(allergy => ({
+            name: allergy.name,
+            type: allergy.type || allergy.name, // Default type to name
+            value: allergy.value || Math.floor(Math.random() * 100), // Use provided value or mock value
+            conceptId: allergy.conceptId,
+            subgroups: allergy.children ? processChildren(allergy.children) : [],
+          }));
+        };
+
+        // Process backend data
+        this.allergies = processAllergies(backendData);
+        console.log('Food allergies processed successfully:', this.allergies);
+
+        // Render the chart after processing
+        this.renderChart();
+      } catch (error) {
+        console.error('Error fetching food allergies:', error);
+        this.error = 'Failed to fetch food allergies. Please try again later.';
       }
-
-      const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
-
-      // Extract and process second-level allergies
-      const secondLevelAllergies = this.allergies.flatMap((allergy) =>
-          allergy.subgroups.map((subgroup) => ({
-            name: subgroup.name.replace(/^(Allergy to|Intolerance to)\s+/i, ""), // Cleaned-up name
-            fullName: subgroup.name, // Full name for tooltip
-            conceptId: subgroup.conceptId, // Code for matching
-            type: allergy.name.toLowerCase().includes("intolerance") ? "intolerance" : "allergy", // Classify by parent type
-          }))
-      );
-
-      this.highlightedCodes = this.findSubclassByCode(
-          this.extractedData.allergySnomedCode,
-          this.extractedData.criticality
-      );
-
-      // Assign equal value to each second-level allergy
-      const equalValue = 100 / secondLevelAllergies.length; // Each gets an equal space
-
-      this.chart = new Chart(ctx, {
-        type: "doughnut",
-        data: {
-          labels: secondLevelAllergies.map((subgroup) => subgroup.name), // Cleaned-up names
-          datasets: [
-            {
-              label: "Food Allergies and Intolerances",
-              data: secondLevelAllergies.map(() => equalValue), // Equal value for all
-              backgroundColor: secondLevelAllergies.map((subgroup) => {
-                if (this.highlightedCodes.includes(subgroup.conceptId)) {
-                  return "#FF0000"; // Highlight red for matching codes
-                }
-                return subgroup.type === "intolerance" ? "#A9A9A9" : "#D3D3D3"; // Dark gray for intolerance, Light gray for allergy
-              }),
-              hoverOffset: 10,
-            },
-          ],
-        },
-        options: {
-          plugins: {
-            legend: {
-              display: true,
-              position: "bottom",
-              labels: {
-                usePointStyle: true,
-                boxWidth: 15,
-                font: {
-                  size: 12,
-                },
-                generateLabels: () => {
-                  return [
-                    { text: "High Risk", fillStyle: "#FF0000" },
-                    { text: "Intolerance", fillStyle: "#A9A9A9" },
-                    { text: "Allergy", fillStyle: "#D3D3D3" },
-                  ];
-                },
-              },
-            },
-            tooltip: {
-              callbacks: {
-                label: (tooltipItem) => {
-                  const index = tooltipItem.dataIndex;
-                  return secondLevelAllergies[index].fullName; // Full name without percentage
-                },
-              },
-            },
-            datalabels: {
-              color: "#000",
-              font: {
-                weight: "bold",
-              },
-              formatter: (value, context) => {
-                const label = context.chart.data.labels[context.dataIndex];
-                return `${label}`;
-              },
-              anchor: "center",
-              align: "center",
-              offset: 0,
-            },
-          },
-          onClick: (event, elements) => {
-            if (elements?.length > 0) {
-              const chartElement = elements[0];
-              const index = chartElement.index;
-
-              // Check if the clicked section is highlighted
-              const conceptId = secondLevelAllergies[index]?.conceptId;
-              if (conceptId && this.highlightedCodes.includes(conceptId)) {
-                // Open pop-out window with allergy information
-                const allergyType = secondLevelAllergies[index]?.fullName || "Unknown Allergy";
-                const allergyValue = equalValue.toFixed(2); // Pass the value as a percentage
-                this.openPopOut(allergyType, allergyValue);
-              }
-            }
-          },
-        },
-      });
     },
 
-    findSubclassByCode(code, criticality) {
-      if (!this.allergies || this.allergies.length === 0) {
-        console.error("Allergies data is missing or empty.");
-        return [];
-      }
+    renderChart() {
+       if (this.chart) {
+         this.chart.destroy();
+       }
 
-      console.log("Searching for code:", code, "with criticality:", criticality);
-      console.log("Allergies data:", this.allergies);
+       const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
 
-      // Array to collect matching second-level conceptIds
-      const matchingSecondLevelCodes = [];
+       // Extract and process second-level allergies
+       const secondLevelAllergies = this.allergies.flatMap((allergy) =>
+           allergy.subgroups.map((subgroup) => ({
+             name: subgroup.name.replace(/^(Allergy to|Intolerance to)\s+/i, ""), // Cleaned-up name
+             fullName: subgroup.name, // Full name for tooltip
+             conceptId: subgroup.conceptId, // Code for matching
+             type: allergy.name.toLowerCase().includes("intolerance") ? "intolerance" : "allergy", // Classify by parent type
+           }))
+       );
 
-      // Function to search recursively in deeper levels
-      const searchHierarchy = (group, parentSubgroup) => {
-        // Check if the current group matches the code
-        if (group.conceptId === code) {
-          console.log("Match found:", group.name);
+       this.highlightedCodes = this.findSubclassByCode(
+           this.extractedData.allergySnomedCode,
+           this.extractedData.criticality
+       );
 
-          // If the parent subgroup exists, return its conceptId
-          if (parentSubgroup) {
-            if (!matchingSecondLevelCodes.includes(parentSubgroup.conceptId)) {
-              matchingSecondLevelCodes.push(parentSubgroup.conceptId);
-            }
-          }
-        }
+       // Assign equal value to each second-level allergy
+       const equalValue = 100 / secondLevelAllergies.length; // Each gets an equal space
 
-        // Recursively search children (if any exist)
-        if (group.children && group.children.length > 0) {
-          for (const child of group.children) {
-            searchHierarchy(child, parentSubgroup);
-          }
-        }
-      };
+       this.chart = new Chart(ctx, {
+         type: "doughnut",
+         data: {
+           labels: secondLevelAllergies.map((subgroup) => subgroup.name), // Cleaned-up names
+           datasets: [
+             {
+               label: "Food Allergies and Intolerances",
+               data: secondLevelAllergies.map(() => equalValue), // Equal value for all
+               backgroundColor: secondLevelAllergies.map((subgroup) => {
+                 if (this.highlightedCodes.includes(subgroup.conceptId)) {
+                   return "#FF0000"; // Highlight red for matching codes
+                 }
+                 return subgroup.type === "intolerance" ? "#A9A9A9" : "#D3D3D3"; // Dark gray for intolerance, Light gray for allergy
+               }),
+               hoverOffset: 10,
+             },
+           ],
+         },
+         options: {
+           plugins: {
+             legend: {
+               display: true,
+               position: "bottom",
+               labels: {
+                 usePointStyle: true,
+                 boxWidth: 15,
+                 font: {
+                   size: 12,
+                 },
+                 generateLabels: () => {
+                   return [
+                     { text: "High Risk", fillStyle: "#FF0000" },
+                     { text: "Intolerance", fillStyle: "#A9A9A9" },
+                     { text: "Allergy", fillStyle: "#D3D3D3" },
+                   ];
+                 },
+               },
+             },
+             tooltip: {
+               callbacks: {
+                 label: (tooltipItem) => {
+                   const index = tooltipItem.dataIndex;
+                   return secondLevelAllergies[index].fullName; // Full name without percentage
+                 },
+               },
+             },
+             datalabels: {
+               color: "#000",
+               font: {
+                 weight: "bold",
+               },
+               formatter: (value, context) => {
+                 const label = context.chart.data.labels[context.dataIndex];
+                 return `${label}`;
+               },
+               anchor: "center",
+               align: "center",
+               offset: 0,
+             },
+           },
+           onClick: (event, elements) => {
+             if (elements?.length > 0) {
+               const chartElement = elements[0];
+               const index = chartElement.index;
 
-      // Loop through top-level allergies
-      for (const allergy of this.allergies) {
-        if (Array.isArray(allergy.subgroups)) {
-          // Iterate through second-level subgroups
-          for (const subgroup of allergy.subgroups) {
-            // Search within each second-level subgroup's hierarchy
-            searchHierarchy(subgroup, subgroup);
-          }
-        }
-      }
+               // Check if the clicked section is highlighted
+               const conceptId = secondLevelAllergies[index]?.conceptId;
+               if (conceptId && this.highlightedCodes.includes(conceptId)) {
+                 // Open pop-out window with allergy information
+                 const allergyType = secondLevelAllergies[index]?.fullName || "Unknown Allergy";
+                 const allergyValue = equalValue.toFixed(2); // Pass the value as a percentage
+                 this.openPopOut(allergyType, allergyValue);
+               }
+             }
+           },
+         },
+       });
+     },
 
-      console.log("Matching second-level conceptIds:", matchingSecondLevelCodes);
+     findSubclassByCode(code, criticality) {
+       if (!this.allergies || this.allergies.length === 0) {
+         console.error("Allergies data is missing or empty.");
+         return [];
+       }
 
-      // Ensure the return value is always an array
-      return matchingSecondLevelCodes.length > 0 ? matchingSecondLevelCodes : [];
-    },*/
+       console.log("Searching for code:", code, "with criticality:", criticality);
+       console.log("Allergies data:", this.allergies);
+
+       // Array to collect matching second-level conceptIds
+       const matchingSecondLevelCodes = [];
+
+       // Function to search recursively in deeper levels
+       const searchHierarchy = (group, parentSubgroup) => {
+         // Check if the current group matches the code
+         if (group.conceptId === code) {
+           console.log("Match found:", group.name);
+
+           // If the parent subgroup exists, return its conceptId
+           if (parentSubgroup) {
+             if (!matchingSecondLevelCodes.includes(parentSubgroup.conceptId)) {
+               matchingSecondLevelCodes.push(parentSubgroup.conceptId);
+             }
+           }
+         }
+
+         // Recursively search children (if any exist)
+         if (group.children && group.children.length > 0) {
+           for (const child of group.children) {
+             searchHierarchy(child, parentSubgroup);
+           }
+         }
+       };
+
+       // Loop through top-level allergies
+       for (const allergy of this.allergies) {
+         if (Array.isArray(allergy.subgroups)) {
+           // Iterate through second-level subgroups
+           for (const subgroup of allergy.subgroups) {
+             // Search within each second-level subgroup's hierarchy
+             searchHierarchy(subgroup, subgroup);
+           }
+         }
+       }
+
+       console.log("Matching second-level conceptIds:", matchingSecondLevelCodes);
+
+       // Ensure the return value is always an array
+       return matchingSecondLevelCodes.length > 0 ? matchingSecondLevelCodes : [];
+     },
 
     openPopOut(allergyType, allergyValue) {
       this.selectedAllergy = allergyType;
@@ -957,10 +1006,11 @@ export default {
   },
 
 
+
   mounted() {
-    //this.fetchFoodAllergies(); // Automatically fetch data when the component is mounted
+    this.fetchFoodAllergies();
     this.fetchPatientData();
-    //this.renderChart();
+    this.renderChart();
 
   }
 };

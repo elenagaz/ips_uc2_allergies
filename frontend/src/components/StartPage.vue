@@ -7,10 +7,8 @@
       </div>
       <div class="navbar-right">
         <!-- Language Dropdown -->
-        <select v-model="selectedLanguage" @change="changeLanguage" class="language-dropdown">
+        <select v-model="selectedLanguage" @change="setLanguage($event.target.value)" class="language-dropdown">
           <option value="en">English</option>
-          <option value="de">Deutsch</option>
-          <option value="fr">Français</option>
           <option value="es">Español</option>
         </select>
         <!-- Lock Icon -->
@@ -67,8 +65,14 @@
                 <label>Additional Information:</label>
                 <!-- Displaying the code and the note if it exists -->
                 <span>
-                {{ entry.code?.coding?.[0]?.display || 'N/A' }}
-                <span v-if="entry.note?.[0]?.text">, {{ entry.note[0].text }}</span>
+                  {{ entry.translatedDisplay || entry.code?.coding?.[0]?.display || 'N/A' }}
+                  <span v-if="entry.note?.[0]?.text">, {{ cleanText(entry.valueCodeableConcept.coding[0].display) }}</span>
+                  <span v-if="getReason(entry.encounter?.reference)">
+                    <span> → </span>
+                    <span class="reason-label-container">
+                      <span class="reason-label">Reason:</span> {{ getReason(entry.encounter?.reference) }}
+                    </span>
+                  </span>
               </span>
               </div>
             </div>
@@ -98,9 +102,9 @@
                 </thead>
                 <tbody>
                 <tr v-for="condition in conditions" :key="condition.id">
-                  <td>{{ condition.code.coding[0].display || 'N/A'}}</td> <!--can be translated-->
-                  <td>{{ condition.clinicalStatus.coding[0].code || 'N/A'}}</td>
-                  <td>{{ condition.severity.coding[0].display }}</td>
+                  <td>{{ condition.translatedCode || condition.code.coding[0].display || 'N/A' }}</td>
+                  <td>{{ condition.clinicalStatus.coding[0].code || 'N/A' }}</td>
+                  <td>{{ condition.translatedSeverity || cleanText(condition.severity.coding[0].display) || 'N/A'}}</td>
                   <td>{{ condition.onsetDateTime || 'N/A'}}</td>
                 </tr>
                 </tbody>
@@ -130,7 +134,7 @@
                   <td>{{ medication.medicationCodeableConcept.coding[0].display || 'N/A'}}</td> <!--can be translated-->
                   <td>{{ medication.status || 'N/A'}}</td>
                   <td>{{ medication.effectiveDateTime || 'N/A'}}</td>
-                  <td>{{ medication.reasonCode[0]?.coding[0]?.display || 'N/A' }}</td>
+                  <td>{{ medication.translatedReason || medication.reasonCode[0]?.coding[0]?.display || 'N/A' }}</td>
                 </tr>
                 </tbody>
               </table>
@@ -230,13 +234,14 @@
             <div v-for="(obs, obsIndex) in vitalSignObservations" :key="'obs-' + obsIndex" class="vital-sign-details">
               <p>
                 <strong>Observation ID:</strong> {{ obs.id || 'N/A' }} |
-                <strong>Type:</strong> {{ obs.code?.coding?.[0]?.display || 'N/A' }} |
+                <strong>Type:</strong> {{ translationsLoinc[obs.id]?.[selectedLanguage] || obs.code?.coding?.[0]?.display || 'N/A' }} |
                 <strong>Date:</strong> {{ obs.effectiveDateTime || 'N/A' }}
               </p>
               <div v-if="obs.note && obs.note.length > 0">
                 <p><strong>Notes:</strong> {{ obs.note[0]?.text || 'No notes available' }}</p>
               </div>
             </div>
+
 
             <!-- Vital Signs Table -->
             <table class="data-table" style="width: 100%; border-collapse: collapse;">
@@ -254,7 +259,7 @@
                     v-for="(component, componentIndex) in obs.component"
                     :key="'component-' + componentIndex"
                     style="background-color: white;">
-                  <td>{{ component.code?.coding?.[0]?.display || 'N/A' }}</td>
+                  <td>{{ translationsLoinc[obs.id]?.[selectedLanguage] || component.code?.coding?.[0]?.display || 'N/A' }}</td>
                   <td>{{ component.valueQuantity?.value || 'N/A' }}</td>
                   <td>{{ component.valueQuantity?.code || 'N/A' }}</td>
                 </tr>
@@ -376,6 +381,8 @@ export default {
       groupedObservations: [],
       selectedEncounterObservations: {},
       filteredAllergies: [],
+      translationsLoinc: {},
+
 
     };
   },
@@ -398,11 +405,18 @@ export default {
       }
       return this.groupedObservations[this.selectedEncounter.id].filter(obs => !obs.id.includes('VitalSign'));
     },
+    translatedObservations() {
+      return this.vitalSignObservations.map(obs => ({
+        ...obs,
+        translatedDisplay: this.translateSnomedCode(obs.code?.coding?.[0]?.code, this.selectedLanguage),
+      }));
+    },
 
   },
 
   async created() {
     try {
+      console.log("-------88888----" + this.selectedLanguage)
       this.patient = await getPatientData();
       await this.fetchPatientData();
 
@@ -464,6 +478,46 @@ export default {
       } catch (error) {
         console.error("Error fetching data:", error);
       }
+    },
+    cleanText(text) {
+      if (text) {
+        return text.replace(/\s?\(.*\)/, '').trim();
+      }
+      return ''; // Return empty if no text is found
+    },
+
+    getReason(encounterReference) {
+      if (!encounterReference) return null; // If no encounterReference, return null
+
+      const encounterId = encounterReference.split('/').pop(); // Extract the actual encounter reference (e.g., "BreathingIssues")
+
+      // Find the encounter by the reference (you can implement this based on your data structure)
+      const encounter = this.getEncounterById(encounterId);
+
+      if (encounter && encounter.reasonCode?.length > 0) {
+        // If reasonCode is found, return the display value
+        return encounter.reasonCode[0]?.coding?.[0]?.display || 'unknown';
+      }
+
+      return 'unknown'; // Default to 'unknown' if no reasonCode is found
+    },
+    getEncounterById(encounterId) {
+      // This function will return the encounter object based on the encounter ID
+      // You need to implement this based on how your encounters are stored in the app
+
+      // For example, if you have a list of encounters, you can filter by encounter ID
+      return this.sortedEncounters.find(encounter => encounter.id === encounterId);
+    },
+    translatedDisplay(entry) {
+      // Check if language is Spanish
+      if (this.selectedLanguage === 'es') {
+        // Translate the code (returns promise or cached value)
+        const translated = this.translateSnomedCode(entry.code?.coding?.[0]?.code, "es");
+        console.log("///////is here" + entry.code?.coding?.[0]?.code + " - the value is: " + translated)
+        return translated || entry.code?.coding?.[0]?.display || 'N/A';
+      }
+      // Default to original display for other languages
+      return entry.code?.coding?.[0]?.display || 'N/A';
     },
 //TODO: use the other server
 
@@ -548,6 +602,74 @@ export default {
         this.error = 'Failed to fetch food allergies. Please try again later.';
       }
     },*/
+    async getTranslatedDisplay(obs) {
+      if (!this.translationsSnomed[obs.id]) {
+        this.set(this.translationsSnomed, obs.id, await this.translateSnomedCode(obs.code?.coding?.[0]?.code, this.selectedLanguage));
+      }
+      return this.translationsSnomed[obs.id];
+    },
+    async fetchTranslation(obs) {
+      obs.translatedDisplay = await this.translateSnomedCode(obs.code?.coding?.[0]?.code, this.selectedLanguage);
+    },
+
+    async updateTranslations() {
+      for (const obs of this.vitalSignObservations) {
+        await this.fetchTranslation(obs);
+      }
+    },
+
+    async setLanguage(language) {
+      this.selectedLanguage = language;
+      console.log("language changed " + this.selectedLanguage)
+      await this.translateConditions();  // Translate conditions after language change
+      await this.translateMedications(); // Translate medications after language change
+      await this.translateLoincEntry("es-MX");
+
+    },
+
+    // Translate all conditions based on the selected language
+    async translateConditions() {
+      for (let condition of this.conditions) {
+        // Translate condition code display text
+        if (condition.code?.coding?.[0]?.display) {
+          condition.translatedCode = await this.translateSnomedCode(condition.code.coding[0].code, this.selectedLanguage);
+        }
+
+        // Translate severity display text
+        if (condition.severity?.coding?.[0]?.display) {
+          condition.translatedSeverity = await this.translateSnomedCode(condition.severity.coding[0].code, this.selectedLanguage);
+        }
+      }
+    },
+
+    async translateMedications() {
+      for (let medication of this.medications) {
+        if (medication.reasonCode?.[0]?.coding?.[0]?.display) {
+          medication.translatedReason = await this.translateSnomedCode(
+              medication.reasonCode[0].coding[0].code,
+              this.selectedLanguage
+          );
+        }
+      }
+    },
+
+    async translateLoincEntry(language) {
+      // Ensure there is a LOINC code to translate
+      if (!this.entry?.code?.coding?.[0]?.code) {
+        console.warn('No LOINC code available for translation.');
+        return;
+      }
+
+      try {
+        const loincCode = this.entry.code.coding[0].code; // Extract the LOINC code
+        console.log(loincCode)
+        const translatedDisplay = await this.translateLoincCode(loincCode, language); // Translate the code
+        // Update the entry with the translated display value
+        this.$set(this.entry, 'translatedDisplay', translatedDisplay);
+      } catch (error) {
+        console.error('Error translating LOINC entry:', error);
+      }
+    },
 
     // fetch allergy intolerances from the allergy reference in the composition resource
     async fetchAllergyIntolerances() {
@@ -623,14 +745,25 @@ export default {
     },*/
 
     async translateSnomedCode(snomedCode, language) {
+      if (!snomedCode || !language) {
+        console.error("Invalid parameters:", { snomedCode, language });
+        return null;
+      }
       try {
+        console.log("Sending request with params:", { snomedCode, language });
         const response = await axios.get('http://localhost:5000/api/translate-snomed', {
           params: { snomedCode, language }
         });
         console.log("Translated data =>", response.data.term);
-        return response.data.term;
+        return response.data.term || null;
       } catch (error) {
-        console.error(`Error fetching SNOMED code translation: ${error}`);
+        if (error.response) {
+          console.error("API Error Response:", error.response.data);
+        } else if (error.request) {
+          console.error("No response from API:", error.request);
+        } else {
+          console.error("Error setting up request:", error.message);
+        }
         return null;
       }
     },
@@ -724,6 +857,7 @@ export default {
       return descriptions.find(desc => desc.lang === language).term;
     },
 
+
     formatAddress(address) {
       // TODO: make it flexible if there is other data saved
       let addressString = '';
@@ -757,10 +891,7 @@ export default {
         this.isObservationsVisible = !this.isObservationsVisible;
       }
     },
-    changeLanguage() {
-      console.log("Language changed to:", this.selectedLanguage);
-      // TODO: add functionality for changing the language
-    },
+
     toggleLock() {
       this.isLocked = !this.isLocked;
       //console.log("Lock status:", this.isLocked ? "Locked" : "Unlocked");
@@ -771,7 +902,9 @@ export default {
       try {
         // Fetch hierarchical allergy data from the backend
         const response = await axios.get('http://localhost:5000/api/food-allergies'); // Update with your backend's endpoint
+        console.log("just check this")
         const data = response.data;
+        console.log(response.data)
 
         // Transform data to match the expected chart structure
         const allergies = data.map((allergy) => ({
@@ -787,18 +920,60 @@ export default {
           })),
         }));
 
-        // Update component state with fetched and transformed data
         this.allergies = allergies;
+        console.log(this.allergies)
 
-        const excludedIds = ["419342009", "447961002", "293861001", "419814004", "5611000122107",
-        "294097003", "419101002", "294095006", "43280700", "294298002", "293842000", "418397007", "294291008",
-        "293868007", "712842007"]; // Add the unwanted conceptIds here
+        const targetIds = [
+          '420174000', // Allergy to wheat
+          '300912001', // Allergy to chocolate
+          '300914000', // Allergy to cheese
+          '782555009', // Allergy to cow's milk protein
+          '213020009', // Allergy to egg protein
+          '712841000', // Allergy to barley
+          '294741005', // Allergy to guar gum
+          '294317009', // Allergy to Arachis oil
+          '294316000', // Allergy to olive oil
+          '91934008',  // Allergy to nut
+          '91932007',  // Allergy to fruit
+          '16067171000119102', // Allergy to food additive
+          '21191000122102', // Allergy to mustard seasoning
+          '1269425007', // Allergy to gluten
+          '418184004', // Allergy to rye
+          '91937001'   // Allergy to seafood
+        ];
 
-         this.filteredAllergies = allergies.map(allergy => ({
-          ...allergy,
-          subgroups: allergy.subgroups.filter(subgroup => !excludedIds.includes(subgroup.conceptId))
-        })).filter(allergy => !excludedIds.includes(allergy.conceptId));
+        // Process data to filter allergies and keep intolerances as-is
+        // Assign filtered data to Vue instance (reactive property)
+        this.filteredAllergies = data.map((category) => {
+          if (category.name === "Allergy to food") {
+            // Filter subgroups for "Allergy to food"
+            const matchingSubgroups = category.subgroups.map((subgroup) => {
+              // Filter children of subgroups
+              const filteredChildren = subgroup.children.filter(child =>
+                  targetIds.includes(child.conceptId)
+              );
 
+              // Include subgroup if its conceptId or any child matches
+              if (targetIds.includes(subgroup.conceptId) || filteredChildren.length > 0) {
+                return {
+                  ...subgroup,
+                  children: filteredChildren
+                };
+              }
+
+              return null; // Exclude subgroup if no match
+            }).filter(Boolean); // Remove null subgroups
+
+            // Return filtered "Allergy to food" category
+            return {
+              ...category,
+              subgroups: matchingSubgroups
+            };
+          }
+
+          // Return "Intolerance to food" category as-is
+          return category;
+        });
 
 
         // Call renderChart after data is ready
@@ -815,10 +990,11 @@ export default {
 
        const ctx = document.getElementById("foodAllergiesChart").getContext("2d");
 
+
        // Extract and process second-level allergies
        const secondLevelAllergies = this.filteredAllergies.flatMap((allergy) =>
            allergy.subgroups.map((subgroup) => ({
-             name: subgroup.name.replace(/^(Allergy to|Intolerance to)\s+/i, ""), // Cleaned-up name
+             name: subgroup.name.replace(/^(Allergy to|Intolerance to)\s+/i, "").replace(/\s+intolerance$/, ""), // Remove prefix and suffix
              fullName: subgroup.name, // Full name for tooltip
              conceptId: subgroup.conceptId, // Code for matching
              type: allergy.name.toLowerCase().includes("intolerance") ? "intolerance" : "allergy", // Classify by parent type
@@ -1007,7 +1183,32 @@ export default {
       return false;
     },
   },
+  /*watch: {
+    selectedLanguage: {
+      immediate: true,
+      async handler(newLanguage) {
+        console.log("new language detected");
+        if (newLanguage === 'en') return;
 
+        for (const obs of this.vitalSignObservations) {
+          // Check if translation for this observation exists for the selected language
+          console.log("checke this code: ++++ " + obs.code?.coding?.[0]?.code)
+          if (!this.translationsLoinc[obs.id]?.[newLanguage]) {
+            const translated = await this.translateLoincCode("63486-5", "es-MX")
+
+            // Initialize the observation id object if it doesn't exist
+            if (!this.translationsLoinc[obs.id]) {
+              this.translationsLoinc[obs.id] = {};  // Directly assign without $set
+            }
+
+            // Set the translated value for the selected language
+            this.translationsLoinc[obs.id][newLanguage] = translated || obs.code?.coding?.[0]?.display || 'N/A';
+          }
+        }
+      },
+    },
+  },
+*/
 
 
   mounted() {
@@ -1409,6 +1610,30 @@ button:hover {
   padding: 0.5rem 0; /* Add space between list items */
   font-size: 1rem;   /* Adjust font size for readability */
 }
+/* Reason label styling */
+.additional-info-reason-container {
+  font-weight: bold;
+  color: #F84836;  /* Red color for the reason */
+}
 
+.additional-info-separator {
+  margin-left: 10px;
+  font-weight: bold;
+  color: #F84836;  /* Color for the separator */
+}
+
+.reason-label {
+  font-weight: 600; /* Makes the word 'Reason' bold */
+}
+
+.reason-label-container {
+  background-color: #fbe8e8;  /* Light pink background */
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.reason-label {
+  font-weight: 600;
+}
 
 </style>

@@ -166,7 +166,8 @@ export const fetchSocialHistoryEntries = async (compositionData) => {
 
         const socialHistoryEntries = await Promise.all(socialHistoryPromises);
 
-        // Log the entries for debugging purposes
+        console.log("---maybe a code? ");
+
         console.log(socialHistoryEntries);
 
         return socialHistoryEntries;

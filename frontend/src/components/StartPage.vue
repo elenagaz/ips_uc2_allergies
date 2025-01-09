@@ -70,7 +70,7 @@
                   <span v-if="getReason(entry.encounter?.reference)">
                     <span> → </span>
                     <span class="reason-label-container">
-                      <span class="reason-label">Reason:</span> {{ getReason(entry.encounter?.reference) }}
+                      <span class="reason-label">Reason:</span> {{ this.reason.translatedReason || getReason(entry.encounter?.reference) }}
                     </span>
                   </span>
               </span>
@@ -157,10 +157,21 @@
         <div class="dashboard-right">
           <div class="dashboard-card">
             <h3 class="card-title">All allergies</h3>
-
             <ul class="allergy-list">
+              <!-- Loop through allergy groups -->
               <li v-for="(allergy, index) in allergyGroups" :key="index">
-                {{ allergy.name }}
+                <!-- Display allergy name -->
+                {{ allergy.translatedCode|| allergy.pt.term }}
+
+                <!-- Check if category includes "food" -->
+                <ul v-if="allergy.pt.term.toLowerCase().includes('food')">
+                  <li>{{translated_Term ? translated_Term : "Allergy to cashew nut"}}</li>
+                </ul>
+
+                <!-- If no match, display "No allergies found" -->
+                <ul v-else>
+                  <li>No allergies found</li>
+                </ul>
               </li>
             </ul>
           </div>
@@ -190,7 +201,7 @@
               <tr v-for="(encounter, index) in sortedEncounters" :key="index" @click="viewEncounterDetails(encounter)">
                 <td>{{ encounter.period?.start || 'unknown' }} - {{ encounter.period?.end || 'unknown' }}</td>
                 <td>{{ encounter.id?.split('-').pop() || 'N/A' }}</td>
-                <td>{{ encounter.reasonCode?.[0]?.coding?.[0]?.display || 'unknown' }}</td>
+                <td>{{ encounter.translatedReason || encounter.reasonCode?.[0]?.coding?.[0]?.display || 'unknown' }}</td>
                 <td>{{ encounter.status || 'N/A' }}</td>
 
                 <!-- Flag column with inline styles to make the box red -->
@@ -383,6 +394,9 @@ export default {
       filteredAllergies: [],
       translationsLoinc: {},
 
+      reasonAddInfo: [],
+      reason: [],
+      translated_Term: null,
 
     };
   },
@@ -425,7 +439,7 @@ export default {
       this.conditions = await extractConditions(this.composition2);
       this.socialHistoryEntries = await fetchSocialHistoryEntries(this.composition2);
 
-      //this.allergyGroups = await getAllergyGroups();
+      //this.allergyGroups = await this.fetchAllergyGroups();
 
       const encountersResponse = await getEncounters();
       if (encountersResponse && encountersResponse.encounterIds && encountersResponse.encounterObjects) {
@@ -471,9 +485,6 @@ export default {
       try {
         const compositionResponse = await axios.get('https://ips-challenge.it.hs-heilbronn.de/fhir/Composition?patient=UC2-Patient');
         this.compositionSections = compositionResponse.data.entry?.map(entry => entry.resource.section).flat() || [];
-
-        const translated_Term = await this.translateLoincCode("63486-5", "es-MX") //testing of this with spanish mexico + if there is no language available uses english term
-        console.log("Translation to test " + translated_Term)
         await this.fetchAllergyIntolerances(); //TODO: maybe remove
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -496,7 +507,8 @@ export default {
 
       if (encounter && encounter.reasonCode?.length > 0) {
         // If reasonCode is found, return the display value
-        return encounter.reasonCode[0]?.coding?.[0]?.display || 'unknown';
+        this.reasonAddInfo = encounter.reasonCode[0]?.coding?.[0]?.code;
+        return  encounter.reasonCode[0]?.coding?.[0]?.display || 'unknown';
       }
 
       return 'unknown'; // Default to 'unknown' if no reasonCode is found
@@ -602,7 +614,7 @@ export default {
         this.error = 'Failed to fetch food allergies. Please try again later.';
       }
     },*/
-    async getTranslatedDisplay(obs) {
+/*    async getTranslatedDisplay(obs) {
       if (!this.translationsSnomed[obs.id]) {
         this.set(this.translationsSnomed, obs.id, await this.translateSnomedCode(obs.code?.coding?.[0]?.code, this.selectedLanguage));
       }
@@ -616,15 +628,36 @@ export default {
       for (const obs of this.vitalSignObservations) {
         await this.fetchTranslation(obs);
       }
-    },
+    },*/
 
     async setLanguage(language) {
       this.selectedLanguage = language;
       console.log("language changed " + this.selectedLanguage)
+      await this.translateReason();
       await this.translateConditions();  // Translate conditions after language change
       await this.translateMedications(); // Translate medications after language change
+      await this.translateAllAllergies();
+      this.translated_Term = await this.translateSnomedCode("712838009", this.selectedLanguage)
       await this.translateLoincEntry("es-MX");
+      await this.translateEncounters(); // Add encounters translation method
 
+
+    },
+
+    async translateEncounters() {
+      for (let encounter of this.sortedEncounters) {
+        // Translate reasonCode (same approach as medications)
+        if (encounter.reasonCode?.[0]?.coding?.[0]?.display) {
+          encounter.translatedReason = await this.translateSnomedCode(
+              encounter.reasonCode[0].coding[0].code,
+              this.selectedLanguage
+          );
+        }
+      }
+    },
+
+    async translateReason() {
+      this.reason.translatedReason = await this.translateSnomedCode( this.reasonAddInfo, this.selectedLanguage);
     },
 
     // Translate all conditions based on the selected language
@@ -639,6 +672,14 @@ export default {
         if (condition.severity?.coding?.[0]?.display) {
           condition.translatedSeverity = await this.translateSnomedCode(condition.severity.coding[0].code, this.selectedLanguage);
         }
+      }
+    },
+
+    // Translate all conditions based on the selected language
+    async translateAllAllergies() {
+      for (let allergy of this.allergyGroups) {
+        // Translate condition code display text
+          allergy.translatedCode = await this.translateSnomedCode(allergy.conceptId, this.selectedLanguage);
       }
     },
 
@@ -897,6 +938,141 @@ export default {
       //console.log("Lock status:", this.isLocked ? "Locked" : "Unlocked");
     },
 
+/*    async fetchFoodAllergies() {
+      console.log("Fetching the data from backend...");
+      try {
+        // Fetch hierarchical allergy data from the backend
+        const response = await axios.get('http://localhost:5000/api/food-allergies');
+        console.log("Backend response:");
+        console.log(response.data);
+
+        //const data = response.data;
+
+        /!*!// Ensure data is available and in the expected array format
+                if (!Array.isArray(data) || data.length === 0) {
+                  console.warn("No data or invalid data format received.");
+                  return; // Exit early if no valid data is available
+                }
+
+                const processChildren = (childrenArray) => {
+                  if (!Array.isArray(childrenArray)) {
+                    console.warn("Received non-array or missing children:", childrenArray);
+                    return []; // Gracefully handle missing or invalid children
+                  }
+                  console.log(childrenArray)
+                  return childrenArray
+                      .filter((child) => {
+                        // Validate if child has the required properties
+                        const isValid = child && child.conceptId;
+                        if (!isValid) {
+                          console.warn("Invalid child detected:", child);
+                        }
+                        return isValid; // Only include valid children with a conceptId
+                      })
+                      .map((child) => {
+                        // Log the processing of each child for debugging
+                        console.log(`Processing child conceptId: ${child.conceptId}`);
+                        return {
+                          conceptId: child.conceptId,
+                          name: child.name || "Unknown",
+                          parentCodes: child.parentCodes || [],
+                          childCodes: child.childCodes || [],
+                          children: processChildren(child.children || []), // Recursive call
+                        };
+                      });
+                };
+
+
+                console.log(" no prob here")
+                const allergies = data
+                    .filter((allergy) => {
+                      const isValid = allergy && allergy.conceptId;
+                      if (!isValid) {
+                        console.warn("Excluding invalid top-level allergy:", allergy);
+                      }
+                      return isValid;
+                    })
+                    .map((allergy) => {
+                      // Log the allergy being processed
+                      console.log(`Processing top-level allergy conceptId: ${allergy.conceptId}`);
+
+                      // Handle potential issues with missing `children`
+                      const children = processChildren(allergy.children || []);
+                      return {
+                        conceptId: allergy.conceptId,
+                        name: allergy.name || "Unknown",
+                        parentCodes: allergy.parentCodes || [],
+                        childCodes: allergy.childCodes || [],
+                        children: children, // Processed children
+                      };
+                    });
+
+                console.log("Transformed allergies:", allergies);*!/
+/!*
+        // Assign processed data to Vue instance
+        this.allergies = data;
+        console.log("ghkkkkkkkkkkkkkkl")
+
+        const targetIds = [
+          '420174000', // Allergy to wheat
+          '300912001', // Allergy to chocolate
+          '300914000', // Allergy to cheese
+          '782555009', // Allergy to cow's milk protein
+          '213020009', // Allergy to egg protein
+          '712841000', // Allergy to barley
+          '294741005', // Allergy to guar gum
+          '294317009', // Allergy to Arachis oil
+          '294316000', // Allergy to olive oil
+          '91934008',  // Allergy to nut
+          '91932007',  // Allergy to fruit
+          '16067171000119102', // Allergy to food additive
+          '21191000122102', // Allergy to mustard seasoning
+          '1269425007', // Allergy to gluten
+          '418184004', // Allergy to rye
+          '91937001'   // Allergy to seafood
+        ];
+
+        // Process data to filter allergies and keep intolerances as-is
+        // Assign filtered data to Vue instance (reactive property)
+        this.filteredAllergies = data.map((category) => {
+          if (category.name === "Allergy to food") {
+            // Filter subgroups for "Allergy to food"
+            const matchingSubgroups = category.subgroups.map((subgroup) => {
+              // Filter children of subgroups
+              const filteredChildren = subgroup.children.filter(child =>
+                  targetIds.includes(child.conceptId)
+              );
+
+              // Include subgroup if its conceptId or any child matches
+              if (targetIds.includes(subgroup.conceptId) || filteredChildren.length > 0) {
+                return {
+                  ...subgroup,
+                  children: filteredChildren
+                };
+              }
+
+              return null; // Exclude subgroup if no match
+            }).filter(Boolean); // Remove null subgroups
+
+            // Return filtered "Allergy to food" category
+            return {
+              ...category,
+              subgroups: matchingSubgroups
+            };
+          }
+
+          // Return "Intolerance to food" category as-is
+          return category;
+        }); *!/
+
+
+        // Call renderChart after data is ready
+        this.renderChart();
+      } catch (error) {
+        console.error('Error fetching and preparing allergy data:', error.message);
+      }
+    },*/
+
     async fetchFoodAllergies() {
       console.log("Fetching the data from backend...");
       try {
@@ -906,19 +1082,25 @@ export default {
         const data = response.data;
         console.log(response.data)
 
+
         // Transform data to match the expected chart structure
         const allergies = data.map((allergy) => ({
           conceptId: allergy.conceptId,
           name: allergy.name,
-          subgroups: allergy.subgroups.map((subgroup) => ({
-            conceptId: subgroup.conceptId,
-            name: subgroup.name,
-            children: subgroup.children.map((child) => ({
-              conceptId: child.conceptId,
-              name: child.name,
-            })),
-          })),
+          subgroups: Array.isArray(allergy.subgroups) // Ensure subgroups is an array
+              ? allergy.subgroups.map((subgroup) => ({
+                conceptId: subgroup.conceptId,
+                name: subgroup.name,
+                children: Array.isArray(subgroup.children) // Ensure children is an array
+                    ? subgroup.children.map((child) => ({
+                      conceptId: child.conceptId,
+                      name: child.name,
+                    }))
+                    : [], // Default to an empty array if children is not an array
+              }))
+              : [], // Default to an empty array if subgroups is not an array
         }));
+
 
         this.allergies = allergies;
         console.log(this.allergies)
@@ -1031,7 +1213,7 @@ export default {
            plugins: {
              legend: {
                display: true,
-               position: "bottom",
+               position: "top",
                labels: {
                  usePointStyle: true,
                  boxWidth: 15,
@@ -1040,8 +1222,8 @@ export default {
                  },
                  generateLabels: () => {
                    return [
-                     { text: "High Risk", fillStyle: "#FF0000" },
-                     { text: "Intolerance", fillStyle: "#A9A9A9" },
+                     { text: "High Risk", fillStyle: "#F95A49" },
+                     { text: "Intolerance", fillStyle: "#8C8C8C" },
                      { text: "Allergy", fillStyle: "#D3D3D3" },
                    ];
                  },
@@ -1182,7 +1364,120 @@ export default {
       }
       return false;
     },
+    async fetchAllergyGroups() {
+      try {
+        console.log("Fetching allergy groups...");
+
+        // Mock response data (since you're providing the input directly)
+        this.allergyGroups = [
+          {
+            "conceptId": "782197009",
+            "active": true,
+            "definitionStatus": "PRIMITIVE",
+            "moduleId": "900000000000207008",
+            "fsn": {
+              "term": "Intolerance to substance (finding)",
+              "lang": "en"
+            },
+            "pt": {
+              "term": "Intolerance to substance",
+              "lang": "en"
+            },
+            "isLeafInferred": false,
+            "id": "782197009"
+          },
+          {
+            "conceptId": "781677003",
+            "active": true,
+            "definitionStatus": "FULLY_DEFINED",
+            "moduleId": "900000000000207008",
+            "fsn": {
+              "term": "Propensity to adverse reaction to potassium (finding)",
+              "lang": "en"
+            },
+            "pt": {
+              "term": "Propensity to adverse reaction to potassium",
+              "lang": "en"
+            },
+            "isLeafInferred": true,
+            "id": "781677003"
+          },
+          {
+            "conceptId": "609433001",
+            "active": true,
+            "definitionStatus": "FULLY_DEFINED",
+            "moduleId": "900000000000207008",
+            "fsn": {
+              "term": "Hypersensitivity disposition (finding)",
+              "lang": "en"
+            },
+            "pt": {
+              "term": "Hypersensitivity disposition",
+              "lang": "en"
+            },
+            "isLeafInferred": false,
+            "id": "609433001"
+          },
+          {
+            "conceptId": "430149006",
+            "active": true,
+            "definitionStatus": "PRIMITIVE",
+            "moduleId": "900000000000207008",
+            "fsn": {
+              "term": "Cross sensitivity reaction (finding)",
+              "lang": "en"
+            },
+            "pt": {
+              "term": "Cross sensitivity reaction",
+              "lang": "en"
+            },
+            "isLeafInferred": true,
+            "id": "430149006"
+          },
+          {
+            "conceptId": "419511003",
+            "active": true,
+            "definitionStatus": "FULLY_DEFINED",
+            "moduleId": "900000000000207008",
+            "fsn": {
+              "term": "Propensity to adverse reactions to drug (finding)",
+              "lang": "en"
+            },
+            "pt": {
+              "term": "Propensity to adverse reactions to drug",
+              "lang": "en"
+            },
+            "isLeafInferred": false,
+            "id": "419511003"
+          },
+          {
+            "conceptId": "418471000",
+            "active": true,
+            "definitionStatus": "FULLY_DEFINED",
+            "moduleId": "900000000000207008",
+            "fsn": {
+              "term": "Propensity to adverse reactions to food (finding)",
+              "lang": "en"
+            },
+            "pt": {
+              "term": "Propensity to adverse reactions to food",
+              "lang": "en"
+            },
+            "isLeafInferred": false,
+            "id": "418471000"
+          }
+        ];
+        console.log("Allergy groups fetched:", this.allergyGroups);
+      } catch (error) {
+        console.error("Error fetching allergy groups:", error);
+        this.error = "Failed to fetch allergy groups. Please try again later.";
+      }
+    },
+
   },
+
+
+
   /*watch: {
     selectedLanguage: {
       immediate: true,
@@ -1212,6 +1507,7 @@ export default {
 
 
   mounted() {
+    this.fetchAllergyGroups();
     this.fetchFoodAllergies();
     this.fetchPatientData();
     this.renderChart();

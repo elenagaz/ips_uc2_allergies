@@ -53,7 +53,7 @@ const fetchFhirData = async (system, code) => {
     try {
         const response = await axios.get(FHIR_API_BASE, {
             params: { system, code },
-            httpsAgent: agent,
+            httpsAgent: agent, // Ensure `agent` is defined earlier in your code
         });
 
         const data = response.data;
@@ -64,18 +64,22 @@ const fetchFhirData = async (system, code) => {
 
         // Extract parent codes
         const parentParameters = data.parameter.filter(
-            (param) => param.name === 'property' && param.part.some((p) => p.name === 'code' && p.valueCode === 'parent')
+            (param) =>
+                param.name === 'property' &&
+                param.part.some((p) => p.name === 'code' && p.valueCode === 'parent')
         );
         const parentCodes = parentParameters.map((param) =>
-            param.part.find((p) => p.name === 'value' && p.valueCode).valueCode
+            param.part.find((p) => p.name === 'value' && p.valueCode)?.valueCode
         );
 
         // Extract child codes
         const childParameters = data.parameter.filter(
-            (param) => param.name === 'property' && param.part.some((p) => p.name === 'code' && p.valueCode === 'child')
+            (param) =>
+                param.name === 'property' &&
+                param.part.some((p) => p.name === 'code' && p.valueCode === 'child')
         );
         const childCodes = childParameters.map((param) =>
-            param.part.find((p) => p.name === 'value' && p.valueCode).valueCode
+            param.part.find((p) => p.name === 'value' && p.valueCode)?.valueCode
         );
 
         return {
@@ -90,54 +94,91 @@ const fetchFhirData = async (system, code) => {
     }
 };
 
-// Function to construct the hierarchical structure
-const constructHierarchy = async (conceptCodes) => {
-    const allergies = [];
 
-    for (const code of conceptCodes) {
-        const allergy = await fetchFhirData('http://snomed.info/sct', code);
-
-        // Fetch child data for subgroups
-        const subgroups = await Promise.all(
-            allergy.childCodes.map(async (childCode) => {
-                const subgroup = await fetchFhirData('http://snomed.info/sct', childCode);
-
-                // Fetch children for each subgroup
-                const children = await Promise.all(
-                    subgroup.childCodes.map(async (childCode) => fetchFhirData('http://snomed.info/sct', childCode))
-                );
-
-                return {
-                    ...subgroup,
-                    children,
-                };
-            })
-        );
-
-        allergies.push({
-            ...allergy,
-            subgroups,
-        });
-    }
-
-    return allergies;
-};
-
-// API Endpoint to fetch and process hierarchical data
 app.get('/api/food-allergies', async (req, res) => {
     try {
-        console.log("in the fetching")
-        const conceptCodes = ['414285001', '235719002']; // Replace with relevant top-level concept codes
+        console.log("Fetching allergy data...");
 
+        const conceptCodes = ['414285001', '235719002']; // These codes will be fetched normally
         const results = await constructHierarchy(conceptCodes);
-        console.log("done with pre-process")
-
+        console.log("API Response: Hierarchy construction completed.");
         res.json(results);
     } catch (error) {
-        console.error('Error fetching data:', error.message);
+        console.error('Error fetching hierarchy data:', error.message);
         res.status(500).send(`Failed to fetch data: ${error.message}`);
     }
 });
+
+// Updated version of constructHierarchy to manage child-fetching logic for 91934008
+const constructHierarchy = async (conceptCodes) => {
+    const allConcepts = [];
+
+    for (const code of conceptCodes) {
+        const concept = await fetchFhirDataWithChildrenCheck('http://snomed.info/sct', code);
+        allConcepts.push(concept);
+    }
+
+    return allConcepts;
+};
+
+// Updated fetchFhirDataWithChildrenCheck function to handle special child-fetching for 91934008
+const fetchFhirDataWithChildrenCheck = async (system, code) => {
+    try {
+        const conceptData = await fetchFhirData(system, code);
+
+        // If the concept is 91934008, fetch its children's children recursively
+        if (code === '91934008' && conceptData.childCodes.length > 0) {
+            console.log(`Fetching children's children for code ${code}: ${conceptData.childCodes}`);
+            const childConcepts = await fetchChildrenOfChildren(system, conceptData.childCodes);
+            conceptData.children = childConcepts;
+        } else if (conceptData.childCodes.length > 0) {
+            // For other codes like 414285001 and 235719002, fetch children normally
+            console.log(`Fetching children for code ${code}: ${conceptData.childCodes}`);
+            const childConcepts = await Promise.all(
+                conceptData.childCodes.map(childCode => fetchFhirDataWithChildrenCheck(system, childCode))
+            );
+            conceptData.children = childConcepts;
+        } else {
+            // No children, so set an empty children array
+            conceptData.children = [];
+        }
+
+        return conceptData;
+    } catch (error) {
+        console.error(`Error fetching FHIR data for code ${code}: ${error.message}`);
+        throw error;
+    }
+};
+
+// Helper function to fetch the children's children for 91934008
+const fetchChildrenOfChildren = async (system, childCodes) => {
+    const childrenOfChildren = await Promise.all(
+        childCodes.map(async (childCode) => {
+            const childData = await fetchFhirData(system, childCode);
+            if (childData.childCodes.length > 0) {
+                const childrenOfChild = await fetchChildrenOfChildren(system, childData.childCodes);
+                childData.children = childrenOfChild;
+            } else {
+                childData.children = [];
+            }
+            return childData;
+        })
+    );
+    return childrenOfChildren;
+};
+
+
+/*const constructHierarchy = async (conceptCodes) => {
+    const hierarchy = [];
+    for (const code of conceptCodes) {
+        console.log(`Starting hierarchy construction for top-level code ${code}`);
+        const conceptTree = await fetchAndConstructHierarchy('http://snomed.info/sct', code, 0);
+        if (conceptTree) {
+            hierarchy.push(conceptTree);
+        }
+    }
+    return hierarchy;
+};*/
 
 
 app.get('/proxy', async (req, res) => {
